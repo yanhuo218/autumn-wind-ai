@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: identity-service
+  datasource:
+    url: ${IDENTITY_DATABASE_URL:jdbc:postgresql://localhost:5432/autumn_wind}
+    username: ${IDENTITY_DATABASE_USERNAME:autumn_wind}
+    password: ${IDENTITY_DATABASE_PASSWORD}
+  flyway:
+    create-schemas: true
+    default-schema: identity
+    schemas: identity
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: identity
+    open-in-view: false
+
+server:
+  port: ${IDENTITY_SERVER_PORT:8081}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

@@ -89,4 +89,6 @@
 2. OpenAPI、事件 Schema、错误码和关联 ID 公共契约。
 3. SecretStore 接口、AES-256-GCM 本地信封加密实现和自动测试。
 
-下一批进入阶段 3，先建立 Identity Service 的认证和账户状态闭环，再接入 Notification Worker 与管理端。
+阶段 3 第一批已建立 Identity Service 的 HTTP/事件契约、Spring Boot 4.1.0 骨架、独立 `identity` schema 迁移，以及邮箱策略、账户状态和 Argon2id 密码哈希测试。
+
+下一批实现注册、登录、不透明会话 Token 和内部 session introspection，再接入 Notification Worker 与管理端。
