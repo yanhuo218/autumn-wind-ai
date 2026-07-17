@@ -33,3 +33,9 @@ management:
     health:
       probes:
         enabled: true
+
+autumn-wind:
+  notification:
+    secret-store:
+      master-key-file: ${NOTIFICATION_SECRET_STORE_MASTER_KEY_FILE}
+      key-id: ${NOTIFICATION_SECRET_STORE_KEY_ID:local-v1}

@@ -1,5 +1,7 @@
 package io.github.yanhuo218.autumnwind.notification.domain.smtp;
 
+import io.github.yanhuo218.autumnwind.notification.domain.email.AsciiEmailAddress;
+
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -14,7 +16,6 @@ public record SmtpSettings(
 ) {
 
     private static final Pattern HOST_LABEL = Pattern.compile("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?");
-    private static final Pattern EMAIL_LOCAL = Pattern.compile("[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+");
 
     public SmtpSettings {
         host = normalizeHost(host);
@@ -23,7 +24,7 @@ public record SmtpSettings(
         }
         Objects.requireNonNull(securityMode, "SMTP 加密模式不能为空。");
         username = normalizeOptional(username, 320, "SMTP 用户名不能超过 320 个字符。");
-        fromAddress = normalizeEmail(fromAddress);
+        fromAddress = AsciiEmailAddress.normalize(fromAddress);
         fromName = requireText(fromName, 200, "发件名称不能为空或超过 200 个字符。");
     }
 
@@ -61,26 +62,6 @@ public record SmtpSettings(
             if (octet > 255) {
                 throw new IllegalArgumentException("SMTP Host 格式不合法。");
             }
-        }
-    }
-
-    private static String normalizeEmail(String value) {
-        String normalized = requireText(value, 320, "发件地址不能为空或超过 320 个字符。");
-        int separator = normalized.indexOf('@');
-        if (separator <= 0 || separator != normalized.lastIndexOf('@')) {
-            throw new IllegalArgumentException("发件地址格式不合法。");
-        }
-
-        String localPart = normalized.substring(0, separator);
-        String domain = normalized.substring(separator + 1);
-        if (localPart.length() > 64 || localPart.startsWith(".") || localPart.endsWith(".")
-                || localPart.contains("..") || !EMAIL_LOCAL.matcher(localPart).matches() || !domain.contains(".")) {
-            throw new IllegalArgumentException("发件地址格式不合法。");
-        }
-        try {
-            return localPart + "@" + normalizeHost(domain);
-        } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("发件地址格式不合法。", exception);
         }
     }
 
