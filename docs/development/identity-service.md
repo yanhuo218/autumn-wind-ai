@@ -40,6 +40,7 @@ mvn "-Dmaven.repo.local=$((Resolve-Path .).Path)\.m2\repository" -pl services/id
 ## 会话与策略
 
 - 浏览器只持有高熵不透明会话 Token，数据库只保存 SHA-256 Hash。
+- CSRF 使用独立的 Cookie Token Repository，不与会话表混用；V2 迁移已删除早期设计中的会话 CSRF Hash 字段。
 - Gateway 通过受 Service JWT 保护的 introspection 接口同步校验会话，账户禁用后旧会话立即失效。
 - 会话 Cookie 必须使用 `HttpOnly`、`Secure` 和适当的 `SameSite`，所有浏览器状态变更请求必须校验 CSRF。
 - 邮箱域策略显式选择 `ALLOWLIST` 或 `BLOCKLIST`，两种模式不能同时生效。
@@ -48,4 +49,4 @@ mvn "-Dmaven.repo.local=$((Resolve-Path .).Path)\.m2\repository" -pl services/id
 
 ## 当前验证
 
-单元测试覆盖账户状态迁移、邮箱规范化、白名单与黑名单语义，以及 Argon2id 随机盐和密码校验。首个迁移已在临时 PostgreSQL 17 容器中执行，确认 7 张表只创建在 `identity` schema。
+单元测试覆盖账户状态迁移、邮箱规范化、白名单与黑名单语义、Token 签发，以及 Argon2id 随机盐和密码校验。迁移已在临时 PostgreSQL 17 容器中执行，确认 7 张表只创建在 `identity` schema；后续结构调整通过新版本迁移完成，不改写已发布迁移。
