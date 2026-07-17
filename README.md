@@ -2,7 +2,7 @@
 
 Autumn Wind Ai 是一个面向多用户场景的 BYOK（Bring Your Own Key）AI 对话平台。平台本身不提供固定模型端点，每位用户可以安全配置自己的 OpenAI-compatible API 地址、密钥和模型能力。
 
-> 当前项目处于设计与初始化阶段，尚未提供可运行版本。
+> 当前项目处于工程初始化阶段，已提供本地工具链和基础设施骨架，业务服务尚未交付。
 
 ## 产品目标
 
@@ -48,9 +48,10 @@ Autumn Wind Ai 是一个面向多用户场景的 BYOK（Bring Your Own Key）AI 
 - [产品与架构设计](docs/superpowers/specs/2026-07-18-autumn-wind-ai-design.md)
 - [本地环境基线](docs/development/environment-baseline.md)
 - [V1 执行与提交计划](docs/development/execution-plan.md)
+- [本地基础设施](docs/development/local-infrastructure.md)
 
 设计规格包含产品范围、页面参照、技术边界、服务职责、核心流程、数据归属、安全要求、测试策略和 V1 验收标准。
 
 ## 开发状态
 
-当前仓库只包含已确认的设计规格。详细实施计划、服务脚手架和运行说明将在规格审阅完成后补充。
+阶段 1 工程基线已完成，当前正在建立基础设施、公共契约和安全凭据存储边界。

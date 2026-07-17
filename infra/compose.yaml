@@ -1,0 +1,116 @@
+name: autumn-wind-ai
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:17-alpine}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-autumn_wind}
+      POSTGRES_USER: ${POSTGRES_USER:-autumn_wind}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 infra/.env 中配置 POSTGRES_PASSWORD}
+    ports:
+      - name: postgres
+        target: 5432
+        published: "${POSTGRES_PORT:-5432}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - platform
+
+  rabbitmq:
+    image: ${RABBITMQ_IMAGE:-rabbitmq:4.1-management-alpine}
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-autumn_wind}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?请在 infra/.env 中配置 RABBITMQ_DEFAULT_PASS}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST:-/autumn-wind}
+    ports:
+      - name: amqp
+        target: 5672
+        published: "${RABBITMQ_AMQP_PORT:-5672}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+      - name: management
+        target: 15672
+        published: "${RABBITMQ_MANAGEMENT_PORT:-15672}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks:
+      - platform
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:8.2-alpine}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?请在 infra/.env 中配置 REDIS_PASSWORD}
+    command:
+      - /bin/sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"
+    ports:
+      - name: redis
+        target: 6379
+        published: "${REDIS_PORT:-6379}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - platform
+
+  minio:
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z}
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-autumn_wind}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?请在 infra/.env 中配置 MINIO_ROOT_PASSWORD}
+    ports:
+      - name: api
+        target: 9000
+        published: "${MINIO_API_PORT:-9000}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+      - name: console
+        target: 9001
+        published: "${MINIO_CONSOLE_PORT:-9001}"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - platform
+
+networks:
+  platform:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  redis-data:
+  minio-data:
