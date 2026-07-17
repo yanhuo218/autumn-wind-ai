@@ -13,7 +13,7 @@ public interface AuthSessionRepository extends JpaRepository<AuthSessionEntity, 
 
     Optional<AuthSessionEntity> findByTokenHash(String tokenHash);
 
-    @Modifying
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
             update AuthSessionEntity session
                set session.revokedAt = :revokedAt
@@ -21,4 +21,17 @@ public interface AuthSessionRepository extends JpaRepository<AuthSessionEntity, 
                and session.revokedAt is null
             """)
     int revokeAllByUserId(@Param("userId") UUID userId, @Param("revokedAt") Instant revokedAt);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update AuthSessionEntity session
+               set session.revokedAt = :revokedAt
+             where session.tokenHash = :tokenHash
+               and session.revokedAt is null
+               and session.expiresAt > :revokedAt
+            """)
+    int revokeActiveByTokenHash(
+            @Param("tokenHash") String tokenHash,
+            @Param("revokedAt") Instant revokedAt
+    );
 }

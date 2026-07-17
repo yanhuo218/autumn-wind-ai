@@ -42,4 +42,21 @@ class UserEntityTest {
         user.recordSuccessfulLogin(now.plusSeconds(2));
         assertFalse(user.isLoginLocked(now.plusSeconds(3)));
     }
+
+    @Test
+    void 锁定到期后重新计算失败窗口() {
+        Instant now = Instant.parse("2026-07-18T00:00:00Z");
+        UserEntity user = UserEntity.register(
+                UUID.randomUUID(), "user@example.com", "hash", "User", false, now
+        );
+
+        user.recordFailedLogin(2, Duration.ofMinutes(15), now);
+        user.recordFailedLogin(2, Duration.ofMinutes(15), now);
+        Instant afterLock = now.plus(Duration.ofMinutes(15));
+        user.recordFailedLogin(2, Duration.ofMinutes(15), afterLock);
+
+        assertFalse(user.isLoginLocked(afterLock.plusSeconds(1)));
+        user.recordFailedLogin(2, Duration.ofMinutes(15), afterLock.plusSeconds(1));
+        assertTrue(user.isLoginLocked(afterLock.plusSeconds(2)));
+    }
 }

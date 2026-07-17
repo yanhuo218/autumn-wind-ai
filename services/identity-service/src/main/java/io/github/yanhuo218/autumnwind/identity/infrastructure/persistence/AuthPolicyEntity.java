@@ -105,4 +105,8 @@ public class AuthPolicyEntity {
     public int loginLockDurationSeconds() {
         return loginLockDurationSeconds;
     }
+
+    public boolean requiresAcceptanceAudit() {
+        return termsAcceptanceRequired || privacyAcceptanceRequired;
+    }
 }

@@ -77,4 +77,8 @@ public class AuthSessionEntity {
     public Instant expiresAt() {
         return expiresAt;
     }
+
+    public Instant createdAt() {
+        return createdAt;
+    }
 }

@@ -113,6 +113,10 @@ public class UserEntity {
     }
 
     public void recordFailedLogin(int failureLimit, Duration lockDuration, Instant now) {
+        if (lockedUntil != null && !lockedUntil.isAfter(now)) {
+            failedLoginCount = 0;
+            lockedUntil = null;
+        }
         failedLoginCount++;
         if (failedLoginCount >= failureLimit) {
             lockedUntil = now.plus(lockDuration);
@@ -149,5 +153,17 @@ public class UserEntity {
 
     public Instant lastLoginAt() {
         return lastLoginAt;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerifiedAt != null;
+    }
+
+    public Instant createdAt() {
+        return createdAt;
+    }
+
+    public Instant updatedAt() {
+        return updatedAt;
     }
 }
