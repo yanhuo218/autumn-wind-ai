@@ -1,0 +1,21 @@
+.superpowers/
+.env
+.env.*
+!.env.example
+*.log
+
+# AI 助手与本地代理配置
+.agents/
+AGENTS.md
+.codex/
+.claude/
+CLAUDE.md
+.gemini/
+GEMINI.md
+.cursor/
+.windsurf/
+.continue/
+.roo/
+.aider*
+.github/copilot-instructions.md
+.github/instructions/
