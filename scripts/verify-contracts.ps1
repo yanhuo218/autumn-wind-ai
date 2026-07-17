@@ -4,6 +4,7 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $openApiFile = Join-Path $projectRoot "contracts/openapi/common.openapi.json"
 $eventSchemaFile = Join-Path $projectRoot "contracts/events/event-envelope.v1.schema.json"
 $identityOpenApiFile = Join-Path $projectRoot "contracts/openapi/identity.openapi.json"
+$notificationOpenApiFile = Join-Path $projectRoot "contracts/openapi/notification.openapi.json"
 $identityEventFiles = @(
     "user-disabled.v1.schema.json",
     "account-deletion-requested.v1.schema.json",
@@ -13,6 +14,7 @@ $identityEventFiles = @(
 $openApi = Get-Content -Raw $openApiFile | ConvertFrom-Json
 $eventSchema = Get-Content -Raw $eventSchemaFile | ConvertFrom-Json
 $identityOpenApi = Get-Content -Raw $identityOpenApiFile | ConvertFrom-Json
+$notificationOpenApi = Get-Content -Raw $notificationOpenApiFile | ConvertFrom-Json
 
 if ($openApi.openapi -notmatch "^3\.1\.") {
     throw "公共 OpenAPI 必须使用 3.1.x。"
@@ -91,6 +93,34 @@ foreach ($operation in $implementedIdentityOperations) {
 $csrfHeaders = $identityOpenApi.paths."/api/v1/auth/csrf".get.responses."200".headers
 if ($null -eq $csrfHeaders."X-CSRF-TOKEN" -or $null -eq $csrfHeaders."Set-Cookie") {
     throw "Identity CSRF 接口必须同时声明 Header Token 和安全 Cookie。"
+}
+
+if ($notificationOpenApi.openapi -notmatch "^3\.1\.") {
+    throw "Notification OpenAPI 必须使用 3.1.x。"
+}
+$requiredNotificationPaths = @(
+    "/api/v1/admin/notification/smtp-config",
+    "/api/v1/admin/notification/test-emails"
+)
+foreach ($path in $requiredNotificationPaths) {
+    if ($null -eq $notificationOpenApi.paths.$path) {
+        throw "Notification OpenAPI 缺少必要路径：$path"
+    }
+}
+$smtpUpdate = $notificationOpenApi.components.schemas.SmtpConfigUpdateRequest
+$smtpPasswordIsNotWriteOnly = $smtpUpdate.properties.password.writeOnly -ne $true
+$smtpPasswordAppearsInView = $null -ne $notificationOpenApi.components.schemas.SmtpConfigView.properties.password
+$smtpViewAllowsUnknownFields = $notificationOpenApi.components.schemas.SmtpConfigView.additionalProperties -ne $false
+if ($smtpPasswordIsNotWriteOnly -or $smtpPasswordAppearsInView -or $smtpViewAllowsUnknownFields) {
+    throw "Notification SMTP 密码必须只写且不能出现在读取视图。"
+}
+$clearPasswordRule = $smtpUpdate.allOf[0].not
+$clearPasswordRequiredFields = @($clearPasswordRule.required)
+$clearPasswordRuleMissesPassword = "password" -notin $clearPasswordRequiredFields
+$clearPasswordRuleMissesFlag = "clearPassword" -notin $clearPasswordRequiredFields
+$clearPasswordRuleAllowsTrue = $clearPasswordRule.properties.clearPassword.const -ne $true
+if ($clearPasswordRuleMissesPassword -or $clearPasswordRuleMissesFlag -or $clearPasswordRuleAllowsTrue) {
+    throw "Notification SMTP 密码与 clearPassword=true 必须互斥。"
 }
 
 $policyRequest = $identityOpenApi.components.schemas.AuthPolicyUpdateRequest

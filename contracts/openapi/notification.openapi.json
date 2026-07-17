@@ -1,0 +1,271 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Autumn Wind Ai Notification Service API",
+    "version": "1.0.0",
+    "description": "SMTP 配置、测试邮件和邮件投递状态契约。"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "由 API Gateway 路由的相对地址"
+    }
+  ],
+  "paths": {
+    "/api/v1/admin/notification/smtp-config": {
+      "get": {
+        "summary": "读取 SMTP 配置",
+        "operationId": "getSmtpConfig",
+        "security": [{"ServiceJwt": []}],
+        "responses": {
+          "200": {
+            "description": "当前 SMTP 配置；不返回密码或密文。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SmtpConfigView"}
+              }
+            }
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "500": {"$ref": "#/components/responses/InternalServerError"}
+        }
+      },
+      "put": {
+        "summary": "创建或更新 SMTP 配置",
+        "description": "password 省略时保留现有凭据；clearPassword=true 时删除现有凭据。两者不能同时提交。",
+        "operationId": "updateSmtpConfig",
+        "security": [{"ServiceJwt": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/SmtpConfigUpdateRequest"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的 SMTP 配置；不返回密码或密文。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/SmtpConfigView"}
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "500": {"$ref": "#/components/responses/InternalServerError"}
+        }
+      }
+    },
+    "/api/v1/admin/notification/test-emails": {
+      "post": {
+        "summary": "创建测试邮件任务",
+        "description": "只创建持久化投递任务并返回 202，不在管理请求中同步执行 SMTP 网络调用。",
+        "operationId": "createTestEmail",
+        "security": [{"ServiceJwt": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/TestEmailRequest"}
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "测试邮件任务已持久化并进入队列。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/TestEmailJobView"}
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "500": {"$ref": "#/components/responses/InternalServerError"}
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ServiceJwt": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "由 Gateway 或获准管理服务提交的短时 Service JWT，必须具备 Notification 管理 scope；管理写操作还必须携带 actor_user_id UUID 声明。"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "请求字段或 SMTP 设置不合法。",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Service JWT 缺失或无效。",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "调用方缺少 Notification 管理权限。",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
+          }
+        }
+      },
+      "NotFound": {
+        "description": "SMTP 配置尚未创建。",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
+          }
+        }
+      },
+      "Conflict": {
+        "description": "配置版本冲突或当前配置不能创建测试任务。",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
+          }
+        }
+      },
+      "InternalServerError": {
+        "description": "服务内部或 SecretStore 错误；SMTP 操作失败关闭。",
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
+          }
+        }
+      }
+    },
+    "schemas": {
+      "SmtpSecurityMode": {
+        "type": "string",
+        "enum": ["STARTTLS", "TLS"]
+      },
+      "SmtpTestStatus": {
+        "type": "string",
+        "enum": ["NEVER", "QUEUED", "SUCCEEDED", "FAILED"]
+      },
+      "SmtpConfigUpdateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "host",
+          "port",
+          "securityMode",
+          "fromAddress",
+          "fromName",
+          "expectedVersion"
+        ],
+        "properties": {
+          "host": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "description": "ASCII DNS 名称或 IPv4 地址；不包含协议、端口或路径。"
+          },
+          "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+          "securityMode": {"$ref": "#/components/schemas/SmtpSecurityMode"},
+          "username": {"type": ["string", "null"], "maxLength": 320},
+          "password": {
+            "type": "string",
+            "writeOnly": true,
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "只写 SMTP 密码；不得记录、返回或写入审计详情。"
+          },
+          "clearPassword": {"type": "boolean", "default": false},
+          "fromAddress": {"type": "string", "format": "email", "maxLength": 320},
+          "fromName": {"type": "string", "minLength": 1, "maxLength": 200},
+          "expectedVersion": {"type": "integer", "minimum": 0}
+        },
+        "allOf": [
+          {
+            "not": {
+              "required": ["password", "clearPassword"],
+              "properties": {"clearPassword": {"const": true}}
+            }
+          }
+        ]
+      },
+      "SmtpConfigView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "host",
+          "port",
+          "securityMode",
+          "passwordConfigured",
+          "fromAddress",
+          "fromName",
+          "lastTestStatus",
+          "version",
+          "updatedAt"
+        ],
+        "properties": {
+          "host": {"type": "string"},
+          "port": {"type": "integer"},
+          "securityMode": {"$ref": "#/components/schemas/SmtpSecurityMode"},
+          "username": {"type": ["string", "null"]},
+          "passwordConfigured": {"type": "boolean"},
+          "fromAddress": {"type": "string", "format": "email"},
+          "fromName": {"type": "string"},
+          "lastTestStatus": {"$ref": "#/components/schemas/SmtpTestStatus"},
+          "lastTestedAt": {"type": ["string", "null"], "format": "date-time"},
+          "version": {"type": "integer", "minimum": 0},
+          "updatedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "TestEmailRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["recipientEmail", "expectedConfigVersion"],
+        "properties": {
+          "recipientEmail": {"type": "string", "format": "email", "maxLength": 320},
+          "expectedConfigVersion": {"type": "integer", "minimum": 0}
+        }
+      },
+      "TestEmailJobView": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["jobId", "status", "createdAt"],
+        "properties": {
+          "jobId": {"type": "string", "format": "uuid"},
+          "status": {"type": "string", "const": "QUEUED"},
+          "createdAt": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  }
+}

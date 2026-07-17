@@ -12,6 +12,7 @@
     <modules>
         <module>libs/secret-store</module>
         <module>services/identity-service</module>
+        <module>services/notification-service</module>
     </modules>
 
     <name>Autumn Wind Ai</name>
