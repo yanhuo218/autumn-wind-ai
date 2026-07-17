@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:autumn-wind-ai:events:email-requested:v1",
+  "title": "EmailRequested 事件 V1",
+  "description": "Identity Service 请求 Notification Worker 投递邮件。事件不携带验证凭据、重置凭据或其他可直接使用的敏感信息。",
+  "allOf": [
+    {
+      "$ref": "./event-envelope.v1.schema.json"
+    },
+    {
+      "type": "object",
+      "required": [
+        "eventType",
+        "eventVersion",
+        "producer",
+        "payload"
+      ],
+      "properties": {
+        "eventType": {
+          "const": "EmailRequested"
+        },
+        "eventVersion": {
+          "const": 1
+        },
+        "producer": {
+          "const": "identity-service"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload"
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "deliveryRequestId",
+        "userId",
+        "recipientEmail",
+        "purpose",
+        "templateKey",
+        "contentReferenceId",
+        "requestedAt"
+      ],
+      "properties": {
+        "deliveryRequestId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "邮件投递请求的幂等标识。"
+        },
+        "userId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "触发邮件请求的用户标识。"
+        },
+        "recipientEmail": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 320,
+          "description": "邮件收件地址，消费者不得将其写入非必要日志。"
+        },
+        "purpose": {
+          "type": "string",
+          "enum": [
+            "EMAIL_VERIFICATION",
+            "PASSWORD_RESET",
+            "SECURITY_NOTIFICATION"
+          ],
+          "description": "邮件用途。"
+        },
+        "templateKey": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{2,63}$",
+          "description": "由 Notification Worker 管理的模板键。"
+        },
+        "contentReferenceId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "受保护邮件内容的非凭据引用。消费者必须通过服务认证获取内容，不能把该标识当作访问凭据。"
+        },
+        "locale": {
+          "type": "string",
+          "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$",
+          "description": "可选的内容语言。"
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "创建投递请求的时间。"
+        }
+      }
+    }
+  }
+}

@@ -3,9 +3,16 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $openApiFile = Join-Path $projectRoot "contracts/openapi/common.openapi.json"
 $eventSchemaFile = Join-Path $projectRoot "contracts/events/event-envelope.v1.schema.json"
+$identityOpenApiFile = Join-Path $projectRoot "contracts/openapi/identity.openapi.json"
+$identityEventFiles = @(
+    "user-disabled.v1.schema.json",
+    "account-deletion-requested.v1.schema.json",
+    "email-requested.v1.schema.json"
+)
 
 $openApi = Get-Content -Raw $openApiFile | ConvertFrom-Json
 $eventSchema = Get-Content -Raw $eventSchemaFile | ConvertFrom-Json
+$identityOpenApi = Get-Content -Raw $identityOpenApiFile | ConvertFrom-Json
 
 if ($openApi.openapi -notmatch "^3\.1\.") {
     throw "公共 OpenAPI 必须使用 3.1.x。"
@@ -47,4 +54,43 @@ foreach ($field in @("eventId", "eventType", "eventVersion", "occurredAt", "prod
     }
 }
 
-Write-Host "公共契约校验通过。"
+if ($identityOpenApi.openapi -notmatch "^3\.1\.") {
+    throw "Identity OpenAPI 必须使用 3.1.x。"
+}
+
+$requiredIdentityPaths = @(
+    "/api/v1/auth/registration-options",
+    "/api/v1/auth/registrations",
+    "/api/v1/auth/sessions",
+    "/api/v1/auth/session",
+    "/api/v1/admin/users",
+    "/api/v1/admin/auth-policy",
+    "/internal/v1/auth/session-introspections"
+)
+foreach ($path in $requiredIdentityPaths) {
+    if ($null -eq $identityOpenApi.paths.$path) {
+        throw "Identity OpenAPI 缺少必要路径：$path"
+    }
+}
+
+$policyRequest = $identityOpenApi.components.schemas.AuthPolicyUpdateRequest
+$policyRequired = @($policyRequest.required)
+if ("emailDomainPolicyMode" -notin $policyRequired -or "emailDomains" -notin $policyRequired) {
+    throw "Identity 认证策略必须显式声明互斥的邮箱域策略模式和域名集合。"
+}
+if ($null -ne $policyRequest.properties.allowedEmailDomains -or $null -ne $policyRequest.properties.blockedEmailDomains) {
+    throw "Identity 认证策略不能同时暴露白名单和黑名单字段。"
+}
+
+foreach ($eventFileName in $identityEventFiles) {
+    $identityEventPath = Join-Path $projectRoot "contracts/events/$eventFileName"
+    $identityEvent = Get-Content -Raw $identityEventPath | ConvertFrom-Json
+    if ($identityEvent.'$schema' -ne "https://json-schema.org/draft/2020-12/schema") {
+        throw "Identity 事件必须使用 JSON Schema Draft 2020-12：$eventFileName"
+    }
+    if ($identityEvent.'$defs'.payload.additionalProperties -ne $true) {
+        throw "Identity 事件 Payload 必须允许兼容新增字段：$eventFileName"
+    }
+}
+
+Write-Host "公共契约和 Identity 契约校验通过。"

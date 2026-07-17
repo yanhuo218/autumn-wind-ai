@@ -1,0 +1,1626 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Autumn Wind Ai Identity Service API",
+    "version": "1.0.0",
+    "description": "Identity Service 的注册、认证、会话、用户管理和认证策略契约。"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "由 API Gateway 路由的相对地址"
+    }
+  ],
+  "tags": [
+    {
+      "name": "公共认证",
+      "description": "访客和已登录用户使用的账户接口。"
+    },
+    {
+      "name": "用户管理",
+      "description": "管理员使用的用户管理接口。"
+    },
+    {
+      "name": "认证策略",
+      "description": "管理员使用的注册和认证策略接口。"
+    },
+    {
+      "name": "内部认证",
+      "description": "受 Service JWT 保护的内部接口。"
+    }
+  ],
+  "paths": {
+    "/api/v1/auth/csrf": {
+      "get": {
+        "tags": ["公共认证"],
+        "summary": "获取 CSRF 防护信息",
+        "operationId": "getCsrfProtection",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "已建立 CSRF 防护上下文。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsrfProtection"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/registration-options": {
+      "get": {
+        "tags": ["公共认证"],
+        "summary": "读取公开注册选项",
+        "description": "只返回注册页面需要的公开策略，不暴露邮箱域名单和登录锁定参数。",
+        "operationId": "getRegistrationOptions",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "当前公开注册选项。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationOptionsView"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/registrations": {
+      "post": {
+        "tags": ["公共认证"],
+        "summary": "注册账户",
+        "operationId": "registerUser",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/Accepted"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/email-verifications": {
+      "post": {
+        "tags": ["公共认证"],
+        "summary": "请求发送邮箱验证邮件",
+        "description": "无论邮箱是否存在，均返回不暴露账户状态的受理结果。",
+        "operationId": "requestEmailVerification",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/Accepted"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/email-verifications/confirmations": {
+      "post": {
+        "tags": ["公共认证"],
+        "summary": "确认邮箱验证",
+        "operationId": "confirmEmailVerification",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationConfirmationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "$ref": "#/components/responses/NoContent"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/sessions": {
+      "post": {
+        "tags": ["公共认证"],
+        "summary": "登录并创建会话",
+        "operationId": "createSession",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功；会话凭据通过受保护 Cookie 设置。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              },
+              "Set-Cookie": {
+                "description": "包含 HttpOnly、Secure 和 SameSite=Lax 的不透明会话 Cookie；不得记录或向其他域转发。",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/session": {
+      "get": {
+        "tags": ["公共认证"],
+        "summary": "读取当前会话",
+        "operationId": "getCurrentSession",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "当前有效会话。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionView"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["公共认证"],
+        "summary": "注销当前会话",
+        "operationId": "deleteCurrentSession",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "204": {
+            "$ref": "#/components/responses/NoContent"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password-resets": {
+      "post": {
+        "tags": ["公共认证"],
+        "summary": "请求密码重置邮件",
+        "description": "无论邮箱是否存在，均返回不暴露账户状态的受理结果。",
+        "operationId": "requestPasswordReset",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/Accepted"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password-resets/confirmations": {
+      "post": {
+        "tags": ["公共认证"],
+        "summary": "确认密码重置",
+        "description": "重置成功后撤销该用户的全部现有会话。",
+        "operationId": "confirmPasswordReset",
+        "security": [],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetConfirmationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "$ref": "#/components/responses/NoContent"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "410": {
+            "$ref": "#/components/responses/Gone"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "tags": ["用户管理"],
+        "summary": "查询用户列表",
+        "operationId": "listUsers",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "按邮箱或显示名称搜索。",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/UserStatus"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "用户分页结果。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": ["用户管理"],
+        "summary": "由管理员创建用户",
+        "operationId": "createUserByAdmin",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCreateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "用户已创建。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{userId}": {
+      "get": {
+        "tags": ["用户管理"],
+        "summary": "读取用户详情",
+        "operationId": "getUserByAdmin",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UserId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "用户详情。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserView"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{userId}/disable": {
+      "post": {
+        "tags": ["用户管理"],
+        "summary": "禁用用户",
+        "description": "禁用成功时同时撤销该用户的全部会话。",
+        "operationId": "disableUser",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UserId"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UserUpdated"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{userId}/enable": {
+      "post": {
+        "tags": ["用户管理"],
+        "summary": "启用用户",
+        "operationId": "enableUser",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UserId"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/UserUpdated"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{userId}/deletion-requests": {
+      "post": {
+        "tags": ["用户管理"],
+        "summary": "请求异步删除账户",
+        "operationId": "requestAccountDeletion",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UserId"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "账户删除流程已受理。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletionRequestView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{userId}/sessions": {
+      "delete": {
+        "tags": ["用户管理"],
+        "summary": "撤销用户全部会话",
+        "operationId": "revokeUserSessions",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UserId"
+          },
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          }
+        ],
+        "responses": {
+          "204": {
+            "$ref": "#/components/responses/NoContent"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/auth-policy": {
+      "get": {
+        "tags": ["认证策略"],
+        "summary": "读取认证策略",
+        "operationId": "getAuthPolicy",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "当前生效的认证策略。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              },
+              "ETag": {
+                "description": "策略版本，用于并发更新保护。",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthPolicyView"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "put": {
+        "tags": ["认证策略"],
+        "summary": "更新认证策略",
+        "operationId": "updateAuthPolicy",
+        "security": [
+          {
+            "SessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CsrfToken"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "上次读取到的策略 ETag。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthPolicyUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的认证策略。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              },
+              "ETag": {
+                "description": "更新后的策略版本。",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthPolicyView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/internal/v1/auth/session-introspections": {
+      "post": {
+        "tags": ["内部认证"],
+        "summary": "校验浏览器会话",
+        "description": "仅供获授权的内部服务调用。请求中的会话凭据必须被日志和 Trace 过滤。",
+        "operationId": "introspectSession",
+        "security": [
+          {
+            "ServiceJwt": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionIntrospectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "会话校验结果；无效会话也使用该响应，不返回原始凭据。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionIntrospectionView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "SessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "AW_SESSION",
+        "description": "浏览器不透明会话凭据。"
+      },
+      "ServiceJwt": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "包含明确 Issuer、Audience 和服务身份的短时 Service JWT。"
+      }
+    },
+    "parameters": {
+      "CsrfToken": {
+        "name": "X-CSRF-TOKEN",
+        "in": "header",
+        "required": true,
+        "description": "与当前 CSRF 防护上下文匹配的值。",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "UserId": {
+        "name": "userId",
+        "in": "path",
+        "required": true,
+        "description": "用户标识。",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "responses": {
+      "Accepted": {
+        "description": "请求已受理；响应不披露账户是否存在。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AcceptedView"
+            }
+          }
+        }
+      },
+      "NoContent": {
+        "description": "操作成功，无响应正文。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        }
+      },
+      "UserUpdated": {
+        "description": "用户状态已更新。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/UserView"
+            }
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "请求字段或业务参数无效。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./common.openapi.json#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "认证失败或会话已失效。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./common.openapi.json#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "当前身份或账户状态不允许执行该操作。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./common.openapi.json#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "目标资源不存在。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./common.openapi.json#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "资源状态或并发版本冲突。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./common.openapi.json#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "Gone": {
+        "description": "一次性操作已过期或已经完成。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./common.openapi.json#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "请求频率超过限制。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          },
+          "Retry-After": {
+            "description": "再次尝试前需要等待的秒数。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./common.openapi.json#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "CsrfProtection": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["headerName", "parameterName", "value"],
+        "properties": {
+          "headerName": {
+            "type": "string"
+          },
+          "parameterName": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "description": "仅用于同源状态变更请求，不得记录。"
+          }
+        }
+      },
+      "RegistrationOptionsView": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "publicRegistrationEnabled",
+          "emailVerificationRequired",
+          "passwordMinimumLength",
+          "termsAcceptanceRequired",
+          "privacyAcceptanceRequired"
+        ],
+        "properties": {
+          "publicRegistrationEnabled": {
+            "type": "boolean"
+          },
+          "emailVerificationRequired": {
+            "type": "boolean"
+          },
+          "passwordMinimumLength": {
+            "type": "integer",
+            "minimum": 12,
+            "maximum": 128
+          },
+          "termsAcceptanceRequired": {
+            "type": "boolean"
+          },
+          "privacyAcceptanceRequired": {
+            "type": "boolean"
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["email", "password", "displayName"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true,
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "acceptedTermsVersion": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "acceptedPrivacyVersion": {
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      },
+      "EmailRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          }
+        }
+      },
+      "VerificationConfirmationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["verificationValue"],
+        "properties": {
+          "verificationValue": {
+            "type": "string",
+            "writeOnly": true,
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "一次性邮箱验证值，不得记录或返回。"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true,
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        }
+      },
+      "PasswordResetConfirmationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["resetValue", "newPassword"],
+        "properties": {
+          "resetValue": {
+            "type": "string",
+            "writeOnly": true,
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "一次性密码重置值，不得记录或返回。"
+          },
+          "newPassword": {
+            "type": "string",
+            "writeOnly": true,
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        }
+      },
+      "AdminCreateUserRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["email", "password", "displayName", "role"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true,
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          },
+          "emailVerified": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "AccountActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reasonCode"],
+        "properties": {
+          "reasonCode": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{1,63}$"
+          }
+        }
+      },
+      "UserRole": {
+        "type": "string",
+        "enum": ["USER", "ADMIN"]
+      },
+      "UserStatus": {
+        "type": "string",
+        "enum": [
+          "PENDING_VERIFICATION",
+          "ACTIVE",
+          "DISABLED",
+          "DELETION_PENDING",
+          "DELETED"
+        ]
+      },
+      "UserView": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "role",
+          "status",
+          "emailVerified",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          },
+          "status": {
+            "$ref": "#/components/schemas/UserStatus"
+          },
+          "emailVerified": {
+            "type": "boolean"
+          },
+          "lastLoginAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SessionView": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["user", "createdAt", "expiresAt"],
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserView"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UserPage": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["items", "page", "size", "totalElements", "totalPages"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserView"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "totalElements": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalPages": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AcceptedView": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["accepted"],
+        "properties": {
+          "accepted": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      },
+      "DeletionRequestView": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["requestId", "userId", "status", "requestedAt"],
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "const": "PENDING"
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AuthPolicyUpdateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "publicRegistrationEnabled",
+          "emailVerificationRequired",
+          "emailDomainPolicyMode",
+          "emailDomains",
+          "verificationValidityMinutes",
+          "verificationResendCooldownSeconds",
+          "verificationFailureLimit",
+          "passwordMinimumLength",
+          "loginFailureLimit",
+          "loginLockMinutes",
+          "termsAcceptanceRequired",
+          "privacyAcceptanceRequired"
+        ],
+        "properties": {
+          "publicRegistrationEnabled": {
+            "type": "boolean"
+          },
+          "emailVerificationRequired": {
+            "type": "boolean"
+          },
+          "emailDomainPolicyMode": {
+            "$ref": "#/components/schemas/EmailDomainPolicyMode"
+          },
+          "emailDomains": {
+            "$ref": "#/components/schemas/EmailDomainList"
+          },
+          "verificationValidityMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 10080
+          },
+          "verificationResendCooldownSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400
+          },
+          "verificationFailureLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "passwordMinimumLength": {
+            "type": "integer",
+            "minimum": 12,
+            "maximum": 128
+          },
+          "loginFailureLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "loginLockMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10080
+          },
+          "termsAcceptanceRequired": {
+            "type": "boolean"
+          },
+          "privacyAcceptanceRequired": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AuthPolicyView": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "publicRegistrationEnabled",
+          "emailVerificationRequired",
+          "emailDomainPolicyMode",
+          "emailDomains",
+          "verificationValidityMinutes",
+          "verificationResendCooldownSeconds",
+          "verificationFailureLimit",
+          "passwordMinimumLength",
+          "loginFailureLimit",
+          "loginLockMinutes",
+          "termsAcceptanceRequired",
+          "privacyAcceptanceRequired",
+          "version",
+          "updatedAt"
+        ],
+        "properties": {
+          "publicRegistrationEnabled": {
+            "type": "boolean"
+          },
+          "emailVerificationRequired": {
+            "type": "boolean"
+          },
+          "emailDomainPolicyMode": {
+            "$ref": "#/components/schemas/EmailDomainPolicyMode"
+          },
+          "emailDomains": {
+            "$ref": "#/components/schemas/EmailDomainList"
+          },
+          "verificationValidityMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 10080
+          },
+          "verificationResendCooldownSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400
+          },
+          "verificationFailureLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "passwordMinimumLength": {
+            "type": "integer",
+            "minimum": 12,
+            "maximum": 128
+          },
+          "loginFailureLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "loginLockMinutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10080
+          },
+          "termsAcceptanceRequired": {
+            "type": "boolean"
+          },
+          "privacyAcceptanceRequired": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedBy": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          }
+        }
+      },
+      "EmailDomainList": {
+        "type": "array",
+        "maxItems": 1000,
+        "uniqueItems": true,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253,
+          "pattern": "^[A-Za-z0-9.-]+$"
+        }
+      },
+      "EmailDomainPolicyMode": {
+        "type": "string",
+        "enum": ["ALLOWLIST", "BLOCKLIST"],
+        "description": "ALLOWLIST 默认拒绝，BLOCKLIST 默认允许；两种模式互斥。"
+      },
+      "SessionIntrospectionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sessionValue"],
+        "properties": {
+          "sessionValue": {
+            "type": "string",
+            "writeOnly": true,
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "来自浏览器会话 Cookie 的不透明值，不得记录或返回。"
+          }
+        }
+      },
+      "SessionIntrospectionView": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["active"],
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "$ref": "#/components/schemas/UserRole"
+          },
+          "accountStatus": {
+            "$ref": "#/components/schemas/UserStatus"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

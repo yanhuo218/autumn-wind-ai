@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:autumn-wind-ai:events:user-disabled:v1",
+  "title": "UserDisabled 事件 V1",
+  "description": "Identity Service 在用户账户被禁用后发布的业务事实。",
+  "allOf": [
+    {
+      "$ref": "./event-envelope.v1.schema.json"
+    },
+    {
+      "type": "object",
+      "required": [
+        "eventType",
+        "eventVersion",
+        "producer",
+        "payload"
+      ],
+      "properties": {
+        "eventType": {
+          "const": "UserDisabled"
+        },
+        "eventVersion": {
+          "const": 1
+        },
+        "producer": {
+          "const": "identity-service"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload"
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "userId",
+        "disabledAt",
+        "reasonCode",
+        "sessionsRevoked"
+      ],
+      "properties": {
+        "userId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "被禁用用户的标识。"
+        },
+        "disabledAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "账户状态变为禁用的时间。"
+        },
+        "reasonCode": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+          "description": "稳定的禁用原因码，不包含管理员自由文本备注。"
+        },
+        "sessionsRevoked": {
+          "type": "boolean",
+          "const": true,
+          "description": "表明该状态变更已使用户会话失效。"
+        },
+        "actorUserId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "执行操作的管理员用户标识；系统操作时省略。"
+        }
+      }
+    }
+  }
+}

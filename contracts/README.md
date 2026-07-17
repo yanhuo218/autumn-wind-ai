@@ -7,6 +7,13 @@
 - `openapi/`：同步 HTTP API 的 OpenAPI 3.1 公共组件。
 - `events/`：异步事件 Envelope 和业务事件 JSON Schema。
 
+当前业务契约包括：
+
+- `openapi/identity.openapi.json`：Identity Service 公共、管理和内部接口。
+- `events/user-disabled.v1.schema.json`：用户禁用事实。
+- `events/account-deletion-requested.v1.schema.json`：账户删除请求事实。
+- `events/email-requested.v1.schema.json`：不携带验证或重置凭据的邮件投递请求。
+
 具体规则参见[契约约定](../docs/development/contract-conventions.md)。
 
 ## 验证

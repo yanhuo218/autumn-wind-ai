@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:autumn-wind-ai:events:account-deletion-requested:v1",
+  "title": "AccountDeletionRequested 事件 V1",
+  "description": "Identity Service 在账户进入待删除状态后发布的业务事实，用于协调各数据所有者执行异步清理。",
+  "allOf": [
+    {
+      "$ref": "./event-envelope.v1.schema.json"
+    },
+    {
+      "type": "object",
+      "required": [
+        "eventType",
+        "eventVersion",
+        "producer",
+        "payload"
+      ],
+      "properties": {
+        "eventType": {
+          "const": "AccountDeletionRequested"
+        },
+        "eventVersion": {
+          "const": 1
+        },
+        "producer": {
+          "const": "identity-service"
+        },
+        "payload": {
+          "$ref": "#/$defs/payload"
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "deletionRequestId",
+        "userId",
+        "requestedAt",
+        "reasonCode"
+      ],
+      "properties": {
+        "deletionRequestId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "账户删除流程的幂等标识。"
+        },
+        "userId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "待删除账户的用户标识。"
+        },
+        "requestedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "账户进入待删除状态的时间。"
+        },
+        "reasonCode": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+          "description": "稳定的删除原因码，不包含自由文本或敏感信息。"
+        },
+        "actorUserId": {
+          "type": "string",
+          "format": "uuid",
+          "description": "发起操作的管理员用户标识；用户自助或系统操作时可以省略。"
+        }
+      }
+    }
+  }
+}
