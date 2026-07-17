@@ -50,6 +50,7 @@ Autumn Wind Ai 是一个面向多用户场景的 BYOK（Bring Your Own Key）AI 
 - [V1 执行与提交计划](docs/development/execution-plan.md)
 - [本地基础设施](docs/development/local-infrastructure.md)
 - [公共契约约定](docs/development/contract-conventions.md)
+- [SecretStore 凭据保护](docs/development/secret-store.md)
 
 设计规格包含产品范围、页面参照、技术边界、服务职责、核心流程、数据归属、安全要求、测试策略和 V1 验收标准。
 

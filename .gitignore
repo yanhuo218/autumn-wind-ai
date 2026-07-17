@@ -31,6 +31,7 @@ progress.md
 # Java 与 Maven
 target/
 *.class
+.m2/
 
 # Node.js 与前端构建
 node_modules/
