@@ -1,0 +1,86 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Autumn Wind Ai 公共 API 组件",
+    "version": "1.0.0",
+    "description": "供公共与内部 HTTP API 引用的稳定错误和关联 ID 定义。"
+  },
+  "paths": {},
+  "components": {
+    "headers": {
+      "CorrelationId": {
+        "description": "用于关联请求、日志、Trace 和异步事件的不透明标识。",
+        "schema": {
+          "$ref": "#/components/schemas/CorrelationId"
+        }
+      }
+    },
+    "schemas": {
+      "CorrelationId": {
+        "type": "string",
+        "minLength": 16,
+        "maxLength": 64,
+        "pattern": "^[A-Za-z0-9._-]+$",
+        "examples": [
+          "01JZ8M4A7X4S6NR2YQF1D9K3CP"
+        ]
+      },
+      "ErrorCode": {
+        "type": "string",
+        "pattern": "^AW-[A-Z][A-Z0-9_]{1,31}-[A-Z][A-Z0-9_]{1,31}-[0-9]{4}$",
+        "examples": [
+          "AW-COMMON-VALIDATION-0001"
+        ]
+      },
+      "FieldError": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "field",
+          "reason"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "code",
+          "message",
+          "correlationId"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "correlationId": {
+            "$ref": "#/components/schemas/CorrelationId"
+          },
+          "fieldErrors": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            }
+          }
+        }
+      }
+    }
+  }
+}
