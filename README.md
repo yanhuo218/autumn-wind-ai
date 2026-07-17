@@ -46,6 +46,8 @@ Autumn Wind Ai 是一个面向多用户场景的 BYOK（Bring Your Own Key）AI 
 ## 项目文档
 
 - [产品与架构设计](docs/superpowers/specs/2026-07-18-autumn-wind-ai-design.md)
+- [本地环境基线](docs/development/environment-baseline.md)
+- [V1 执行与提交计划](docs/development/execution-plan.md)
 
 设计规格包含产品范围、页面参照、技术边界、服务职责、核心流程、数据归属、安全要求、测试策略和 V1 验收标准。
 

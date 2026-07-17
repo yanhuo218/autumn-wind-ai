@@ -19,3 +19,36 @@ GEMINI.md
 .aider*
 .github/copilot-instructions.md
 .github/instructions/
+
+# Codex 本地执行计划
+task_plan.md
+findings.md
+progress.md
+.planning/
+.pnpm-store/
+.uv-cache/
+
+# Java 与 Maven
+target/
+*.class
+
+# Node.js 与前端构建
+node_modules/
+dist/
+.vite/
+coverage/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# IDE 与操作系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
