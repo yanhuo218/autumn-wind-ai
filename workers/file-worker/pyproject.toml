@@ -1,0 +1,9 @@
+[project]
+name = "autumn-wind-file-worker"
+version = "0.1.0"
+description = "Autumn Wind Ai 文件解析 Worker"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[tool.uv]
+package = false

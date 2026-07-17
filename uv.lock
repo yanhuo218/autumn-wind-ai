@@ -1,0 +1,13 @@
+version = 1
+revision = 3
+requires-python = "==3.12.*"
+
+[manifest]
+members = [
+    "autumn-wind-file-worker",
+]
+
+[[package]]
+name = "autumn-wind-file-worker"
+version = "0.1.0"
+source = { virtual = "workers/file-worker" }
