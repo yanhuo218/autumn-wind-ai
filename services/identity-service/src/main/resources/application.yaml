@@ -16,6 +16,9 @@ spring:
       hibernate:
         default_schema: identity
     open-in-view: false
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
 
 server:
   port: ${IDENTITY_SERVER_PORT:8081}

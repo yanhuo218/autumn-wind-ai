@@ -42,6 +42,20 @@
             "headers": {
               "X-Correlation-ID": {
                 "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              },
+              "X-CSRF-TOKEN": {
+                "description": "与 HttpOnly CSRF Cookie 对应的掩码 Token，用于后续同源状态变更请求。",
+                "schema": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                }
+              },
+              "Set-Cookie": {
+                "description": "建立 host-only AW_CSRF Cookie，属性为 HttpOnly、Secure、SameSite=Lax 和 Path=/，不设置 Domain。",
+                "schema": {
+                  "type": "string"
+                }
               }
             },
             "content": {
@@ -54,6 +68,9 @@
           },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -83,6 +100,9 @@
           },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -120,6 +140,12 @@
           },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -225,7 +251,7 @@
                 "$ref": "./common.openapi.json#/components/headers/CorrelationId"
               },
               "Set-Cookie": {
-                "description": "包含 HttpOnly、Secure 和 SameSite=Lax 的不透明会话 Cookie；不得记录或向其他域转发。",
+                "description": "包含 HttpOnly、Secure、SameSite=Lax 和 Path=/ 的 host-only 不透明会话 Cookie；不设置 Domain，不得记录或向其他域转发。",
                 "schema": {
                   "type": "string"
                 }
@@ -250,6 +276,9 @@
           },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -282,6 +311,9 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       },
@@ -301,10 +333,27 @@
         ],
         "responses": {
           "204": {
-            "$ref": "#/components/responses/NoContent"
+            "description": "注销成功并清除浏览器会话 Cookie。",
+            "headers": {
+              "X-Correlation-ID": {
+                "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+              },
+              "Set-Cookie": {
+                "description": "使用 Path=/、Max-Age=0、HttpOnly、Secure 和 SameSite=Lax 清除 host-only AW_SESSION Cookie。",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -1077,6 +1126,36 @@
               "type": "integer",
               "minimum": 1
             }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./common.openapi.json#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "所需身份能力尚未启用，请稍后重试或联系管理员。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "./common.openapi.json#/components/schemas/ErrorResponse"
+            }
+          }
+        }
+      },
+      "InternalServerError": {
+        "description": "服务内部错误；客户端只应依赖稳定错误码和关联 ID，不得依赖内部诊断信息。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
           }
         },
         "content": {

@@ -109,4 +109,12 @@ public class AuthPolicyEntity {
     public boolean requiresAcceptanceAudit() {
         return termsAcceptanceRequired || privacyAcceptanceRequired;
     }
+
+    public boolean termsAcceptanceRequired() {
+        return termsAcceptanceRequired;
+    }
+
+    public boolean privacyAcceptanceRequired() {
+        return privacyAcceptanceRequired;
+    }
 }

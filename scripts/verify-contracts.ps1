@@ -73,6 +73,25 @@ foreach ($path in $requiredIdentityPaths) {
     }
 }
 
+$implementedIdentityOperations = @(
+    $identityOpenApi.paths."/api/v1/auth/csrf".get,
+    $identityOpenApi.paths."/api/v1/auth/registration-options".get,
+    $identityOpenApi.paths."/api/v1/auth/registrations".post,
+    $identityOpenApi.paths."/api/v1/auth/sessions".post,
+    $identityOpenApi.paths."/api/v1/auth/session".get,
+    $identityOpenApi.paths."/api/v1/auth/session".delete
+)
+foreach ($operation in $implementedIdentityOperations) {
+    if ("500" -notin @($operation.responses.PSObject.Properties.Name)) {
+        throw "Identity 已实现接口必须声明统一 500 响应。"
+    }
+}
+
+$csrfHeaders = $identityOpenApi.paths."/api/v1/auth/csrf".get.responses."200".headers
+if ($null -eq $csrfHeaders."X-CSRF-TOKEN" -or $null -eq $csrfHeaders."Set-Cookie") {
+    throw "Identity CSRF 接口必须同时声明 Header Token 和安全 Cookie。"
+}
+
 $policyRequest = $identityOpenApi.components.schemas.AuthPolicyUpdateRequest
 $policyRequired = @($policyRequest.required)
 if ("emailDomainPolicyMode" -notin $policyRequired -or "emailDomains" -notin $policyRequired) {

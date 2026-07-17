@@ -47,6 +47,12 @@ mvn "-Dmaven.repo.local=$((Resolve-Path .).Path)\.m2\repository" -pl services/id
 - 邮箱域名先做 IDNA ASCII、大小写和末尾点规范化，再执行完整域名精确匹配；V1 不支持通配符。
 - 关闭公开注册不影响已有用户登录和管理员创建账户。
 
+浏览器首次进入认证页面时，应先请求 `GET /api/v1/auth/csrf`。服务返回 HttpOnly 的 `AW_CSRF` Cookie，并在响应正文和 `X-CSRF-TOKEN` Header 中返回对应的掩码 Token。后续注册、登录和注销请求必须由浏览器自动携带 `AW_CSRF` Cookie，同时把掩码 Token 放入 `X-CSRF-TOKEN` Header；前端不得尝试读取 Cookie，也不得记录 Token。
+
+登录成功后服务设置 host-only 的 `AW_SESSION` Cookie，属性固定为 `HttpOnly`、`Secure`、`SameSite=Lax` 和 `Path=/`，不设置 `Domain`。注销使用相同属性和 `Max-Age=0` 清除 Cookie。重复同名会话 Cookie 按无效会话处理；无效 Cookie 不阻断公开注册或登录，但受保护接口统一返回 `401`。
+
+浏览器安全链采用无状态 SecurityContext，对健康检查、CSRF、注册选项、注册和登录显式放行，对当前会话要求认证，对管理路径要求 `ADMIN`，其他路径默认拒绝。后续接入内部 Service JWT 时必须使用独立且优先级更高的安全链，不能复用浏览器 Cookie 认证。
+
 ## 应用服务行为
 
 - 公开注册先执行注册开关、邮箱域、密码和输入校验，再进行 Argon2id Hash。已存在邮箱与数据库并发唯一冲突均返回统一受理结果，不修改原账户，也不暴露邮箱是否存在。
@@ -59,4 +65,4 @@ mvn "-Dmaven.repo.local=$((Resolve-Path .).Path)\.m2\repository" -pl services/id
 
 ## 当前验证
 
-当前 36 项单元测试覆盖账户状态迁移、邮箱规范化、白名单与黑名单语义、Token 签发、Argon2id 随机盐、注册统一受理、登录锁定、乐观锁重试、会话查询、注销和 introspection。迁移已在临时 PostgreSQL 17 容器中执行，确认 7 张表只创建在 `identity` schema；后续结构调整通过新版本迁移完成，不改写已发布迁移。
+当前自动化测试覆盖账户状态迁移、邮箱规范化、白名单与黑名单语义、Token 签发、Argon2id 随机盐、注册统一受理、登录锁定、乐观锁重试、会话查询、注销、introspection、真实 Cookie CSRF 协作和浏览器安全链。迁移已在临时 PostgreSQL 17 容器中执行，确认 7 张表只创建在 `identity` schema；后续结构调整通过新版本迁移完成，不改写已发布迁移。
