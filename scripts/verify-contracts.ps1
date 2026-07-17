@@ -79,7 +79,8 @@ $implementedIdentityOperations = @(
     $identityOpenApi.paths."/api/v1/auth/registrations".post,
     $identityOpenApi.paths."/api/v1/auth/sessions".post,
     $identityOpenApi.paths."/api/v1/auth/session".get,
-    $identityOpenApi.paths."/api/v1/auth/session".delete
+    $identityOpenApi.paths."/api/v1/auth/session".delete,
+    $identityOpenApi.paths."/internal/v1/auth/session-introspections".post
 )
 foreach ($operation in $implementedIdentityOperations) {
     if ("500" -notin @($operation.responses.PSObject.Properties.Name)) {

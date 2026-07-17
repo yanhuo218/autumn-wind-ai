@@ -942,6 +942,9 @@
           },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
           }
         }
       }
@@ -959,7 +962,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "包含明确 Issuer、Audience 和服务身份的短时 Service JWT。"
+        "description": "短时 RS256 Service JWT；必须包含配置的 Issuer、Audience、获准的 sub 服务身份和专用 scope，签发到过期的跨度不得超过服务配置上限。"
       }
     },
     "parameters": {
@@ -1679,6 +1682,7 @@
       "SessionIntrospectionView": {
         "type": "object",
         "additionalProperties": true,
+        "description": "active=false 时省略用户、角色、账户状态和过期时间字段。",
         "required": ["active"],
         "properties": {
           "active": {

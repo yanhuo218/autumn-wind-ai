@@ -82,7 +82,7 @@ public class IdentityExceptionHandler {
         return switch (errorCode) {
             case INVALID_REQUEST -> HttpStatus.BAD_REQUEST;
             case REGISTRATION_NOT_ALLOWED, ACCESS_DENIED -> HttpStatus.FORBIDDEN;
-            case AUTHENTICATION_FAILED, INVALID_SESSION -> HttpStatus.UNAUTHORIZED;
+            case AUTHENTICATION_FAILED, INVALID_SESSION, INVALID_SERVICE_TOKEN -> HttpStatus.UNAUTHORIZED;
             case REGISTRATION_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
             case POLICY_UNAVAILABLE, INTERNAL_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
         };

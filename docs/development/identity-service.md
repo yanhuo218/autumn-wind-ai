@@ -51,7 +51,11 @@ mvn "-Dmaven.repo.local=$((Resolve-Path .).Path)\.m2\repository" -pl services/id
 
 登录成功后服务设置 host-only 的 `AW_SESSION` Cookie，属性固定为 `HttpOnly`、`Secure`、`SameSite=Lax` 和 `Path=/`，不设置 `Domain`。注销使用相同属性和 `Max-Age=0` 清除 Cookie。重复同名会话 Cookie 按无效会话处理；无效 Cookie 不阻断公开注册或登录，但受保护接口统一返回 `401`。
 
-浏览器安全链采用无状态 SecurityContext，对健康检查、CSRF、注册选项、注册和登录显式放行，对当前会话要求认证，对管理路径要求 `ADMIN`，其他路径默认拒绝。后续接入内部 Service JWT 时必须使用独立且优先级更高的安全链，不能复用浏览器 Cookie 认证。
+浏览器安全链采用无状态 SecurityContext，对健康检查、CSRF、注册选项、注册和登录显式放行，对当前会话要求认证，对管理路径要求 `ADMIN`，其他路径默认拒绝。内部 Service JWT 使用独立且优先级更高的安全链，不能复用浏览器 Cookie 认证。
+
+内部 `POST /internal/v1/auth/session-introspections` 使用优先级更高的独立资源服务器链，不使用浏览器 Cookie，也不校验 CSRF。Service JWT 只接受 RS256，必须通过 JWK Set 验签，并同时满足配置的 issuer、`identity-service` audience、`sub` 调用方白名单和 `identity.session.introspect` scope。Token 必须同时包含签发与过期时间，默认最大有效跨度为 5 分钟。Identity Service 只验证 Token，不持有或签发内部服务私钥。
+
+部署时必须提供 `IDENTITY_SERVICE_JWT_ISSUER` 和 HTTPS 的 `IDENTITY_SERVICE_JWT_JWK_SET_URI`。可选变量包括 `IDENTITY_SERVICE_JWT_AUDIENCE`、逗号分隔的 `IDENTITY_SERVICE_JWT_ALLOWED_CALLERS`、`IDENTITY_SERVICE_JWT_REQUIRED_SCOPE` 和 ISO-8601 Duration 格式的 `IDENTITY_SERVICE_JWT_MAXIMUM_LIFETIME`。最大有效期必须大于零且不超过 1 小时。默认只允许 `gateway-service` 调用 introspection；生产环境应按实际服务清单显式配置，不能把网络位置视为身份。
 
 ## 应用服务行为
 

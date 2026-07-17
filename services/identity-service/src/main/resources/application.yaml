@@ -33,3 +33,13 @@ management:
     health:
       probes:
         enabled: true
+
+autumn-wind:
+  identity:
+    service-jwt:
+      issuer: ${IDENTITY_SERVICE_JWT_ISSUER}
+      audience: ${IDENTITY_SERVICE_JWT_AUDIENCE:identity-service}
+      jwk-set-uri: ${IDENTITY_SERVICE_JWT_JWK_SET_URI}
+      allowed-callers: ${IDENTITY_SERVICE_JWT_ALLOWED_CALLERS:gateway-service}
+      required-scope: ${IDENTITY_SERVICE_JWT_REQUIRED_SCOPE:identity.session.introspect}
+      maximum-lifetime: ${IDENTITY_SERVICE_JWT_MAXIMUM_LIFETIME:PT5M}
