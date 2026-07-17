@@ -83,9 +83,10 @@
 
 ## 当前执行批次
 
-第一批包含两个提交：
+阶段 1 和阶段 2 已完成并推送到 `main`。阶段 2 包含：
 
-1. `docs:` 环境基线、执行计划和本地执行文件忽略规则。
-2. `build:` Java、Node.js、Python 根工具链骨架及基础验证。
+1. PostgreSQL、RabbitMQ、Redis 和 MinIO 本地 Compose 基线。
+2. OpenAPI、事件 Schema、错误码和关联 ID 公共契约。
+3. SecretStore 接口、AES-256-GCM 本地信封加密实现和自动测试。
 
-两个提交均验证通过后推送 `main`。
+下一批进入阶段 3，先建立 Identity Service 的认证和账户状态闭环，再接入 Notification Worker 与管理端。
