@@ -205,6 +205,7 @@ feat: 建立Gateway服务JWT边界
 
 **文件：**
 
+- 修改：`services/gateway-service/pom.xml`
 - 新建：`services/gateway-service/src/main/java/io/github/yanhuo218/autumnwind/gateway/configuration/GatewayWebClientConfiguration.java`
 - 新建：`services/gateway-service/src/main/java/io/github/yanhuo218/autumnwind/gateway/configuration/GatewaySecurityConfiguration.java`
 - 新建：`services/gateway-service/src/main/java/io/github/yanhuo218/autumnwind/gateway/identity/IdentityAuthProxyClient.java`
