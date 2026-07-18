@@ -625,11 +625,11 @@ interface ConversationSession {
 }
 ```
 
-- [ ] **Step 1：先写输入区交互红灯测试**
+- [x] **Step 1：先写输入区交互红灯测试**
 
 覆盖空文本禁用、未选模型禁用、`Enter` 发送、`Shift+Enter` 换行、`nativeEvent.isComposing` 时不发送、生成中同尺寸按钮切换为停止、重复提交被阻止。
 
-- [ ] **Step 2：实现稳定输入区**
+- [x] **Step 2：实现稳定输入区**
 
 文本域初始 `56px`、最大 `200px`；按钮固定尺寸。第一版不渲染附件按钮。发送时生成 UUID：
 
@@ -641,19 +641,19 @@ interface ConversationSession {
 }
 ```
 
-- [ ] **Step 3：先写会话提交红灯测试**
+- [x] **Step 3：先写会话提交红灯测试**
 
 无 conversationId 时先创建会话并导航；已有会话直接生成。收到 accepted 后立即显示用户消息和 PENDING 助手轨，流事件经 reducer 更新。停止调用后保留部分文本并进入 STOPPED。
 
-- [ ] **Step 4：实现会话控制 Hook**
+- [x] **Step 4：实现会话控制 Hook**
 
 Hook 持有 `AbortController`，组件卸载只断开浏览器订阅，不自动停止服务端生成。提交成功或终态后失效会话列表与详情 Query。网络超时重试创建请求时必须复用同一 `clientRequestId`。
 
-- [ ] **Step 5：实现消息列**
+- [x] **Step 5：实现消息列**
 
 用户消息使用轻边界块；助手正文无卡片并配状态轨。Markdown 使用 `react-markdown` + `remark-gfm`，不启用原始 HTML。复制、停止、重新生成使用 Lucide 图标和 Tooltip。
 
-- [ ] **Step 6：运行 Task 6 验证并提交**
+- [x] **Step 6：运行 Task 6 验证并提交**
 
 ```powershell
 pnpm --filter @autumn-wind/user-web test

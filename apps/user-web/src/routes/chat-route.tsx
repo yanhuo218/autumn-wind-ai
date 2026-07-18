@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router';
 
-import type { ModelView } from '@autumn-wind/api-contracts';
+import type { MessageView } from '@autumn-wind/api-contracts';
 
 import { AppShell } from '../components/app-shell';
 import { createConversationClient, type ConversationClient } from '../features/conversation/api/conversation-client';
 import { ConversationSidebar } from '../features/conversation/components/conversation-sidebar';
+import { Composer } from '../features/conversation/components/composer';
+import { MessageList } from '../features/conversation/components/message-list';
+import { useConversationSession } from '../features/conversation/state/use-conversation-session';
 import { createModelCatalog, getDefaultModelId, type ModelCatalog } from '../features/models/model-catalog';
 import { ModelSelector } from '../features/models/components/model-selector';
 import { conversationKeys, queryClient } from '../lib/query-client';
@@ -44,6 +47,21 @@ export function ChatRoute({
   const navigate = useNavigate();
   const { conversationId } = useParams<{ conversationId?: string }>();
   const [selectedModelId, setSelectedModelId] = useState<string>();
+  const [optimisticUserText, setOptimisticUserText] = useState<string>();
+  const previousRouteConversationIdRef = useRef(conversationId);
+  const session = useConversationSession({
+    conversationClient,
+    conversationId,
+    onConversationCreated: (createdId) => navigate(`/chat/${createdId}`)
+  });
+
+  useEffect(() => {
+    const previousRouteConversationId = previousRouteConversationIdRef.current;
+    if (previousRouteConversationId !== conversationId && previousRouteConversationId !== undefined) {
+      setOptimisticUserText(undefined);
+    }
+    previousRouteConversationIdRef.current = conversationId;
+  }, [conversationId]);
 
   const conversationsQuery = useQuery({
     queryKey: conversationKeys.all,
@@ -73,6 +91,39 @@ export function ChatRoute({
 
   const title = detailQuery.data?.title ?? '新会话';
   const conversations = conversationsQuery.data?.items ?? [];
+  const messages = detailQuery.data?.messages ?? [];
+  const displayedMessages = useMemo(() => {
+    const active = session.activeGeneration;
+    if (!active || messages.some((message) => message.generationId === active.generationId)) {
+      return messages;
+    }
+
+    const hasPersistedUserMessage = optimisticUserText !== undefined && messages.some(
+      (message) => message.role === 'USER' && message.content.blocks.some(
+        (block) => block.type === 'text' && block.text === optimisticUserText
+      )
+    );
+    const optimistic: MessageView[] = [];
+    if (!hasPersistedUserMessage && optimisticUserText) {
+      optimistic.push({
+        messageId: `optimistic-user-${active.generationId}`,
+        role: 'USER',
+        content: { schemaVersion: 1, blocks: [{ type: 'text', text: optimisticUserText }] },
+        completeness: 'COMPLETE',
+        generationId: null,
+        createdAt: new Date().toISOString()
+      });
+    }
+    optimistic.push({
+      messageId: `optimistic-assistant-${active.generationId}`,
+      role: 'ASSISTANT',
+      content: { schemaVersion: 1, blocks: [{ type: 'text', text: active.content }] },
+      completeness: 'PARTIAL',
+      generationId: active.generationId,
+      createdAt: new Date().toISOString()
+    });
+    return [...messages, ...optimistic];
+  }, [messages, optimisticUserText, session.activeGeneration]);
 
   const handleCreateConversation = async () => {
     try {
@@ -105,6 +156,12 @@ export function ChatRoute({
     />
   );
 
+  const copyToClipboard = async (text: string) => {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text);
+    }
+  };
+
   return (
     <div className="aw-chat-route" data-testid="chat-route">
       <AppShell
@@ -127,10 +184,28 @@ export function ChatRoute({
           title: <ConversationTitle title={title} />,
           model: modelSelector
         }}
-        messages={
+        messages={displayedMessages.length > 0 || Boolean(session.error || session.activeGeneration) ? (
+          <MessageList
+            messages={displayedMessages}
+            activeGeneration={session.activeGeneration}
+            error={session.error}
+            onCopy={copyToClipboard}
+            onStop={() => session.stop()}
+          />
+        ) : (
           <EmptyConversationState hasConversation={Boolean(conversationId || detailQuery.data)} />
+        )}
+        composer={
+          <Composer
+            modelId={selectedModelId}
+            submitting={session.submitting}
+            onSubmit={async (input) => {
+              setOptimisticUserText(input.text);
+              await session.submit(input);
+            }}
+            onStop={session.stop}
+          />
         }
-        composer={<span aria-hidden="true" />}
         messagesTestId="user-web-root"
       />
     </div>
