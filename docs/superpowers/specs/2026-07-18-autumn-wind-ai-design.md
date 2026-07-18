@@ -314,7 +314,7 @@ Worker 必须限制 CPU、内存、执行时间、压缩层级和解压后大小
 5. Inference Gateway 加载适配器和临时凭据，再次校验目标地址，然后调用服务商。
 6. 标准化流事件使用 `start`、`reasoning`、`text_delta`、`usage`、`error` 和 `done`。
 7. Conversation Service 保存最终助手消息和生成状态。
-8. 流断开后可以重连并获取近期缓冲事件；部分输出标记为 `interrupted`，不能伪装为完整回答。
+8. 浏览器流断开后生成继续，并可重连获取近期缓冲事件；只有上游或服务异常中断时，部分输出才标记为 `interrupted`，且不能伪装为完整回答。
 
 ### 8.4 附件流程
 
