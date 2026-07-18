@@ -8,7 +8,8 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtAudienceValidator;
 import org.springframework.security.oauth2.jwt.JwtClaimValidator;
-import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -24,8 +25,11 @@ public final class ServiceJwtValidator implements OAuth2TokenValidator<Jwt> {
     public ServiceJwtValidator(ServiceJwtProperties properties, Clock clock) {
         Objects.requireNonNull(properties, "Service JWT 配置不能为空。");
         Objects.requireNonNull(clock, "时钟不能为空。");
+        JwtTimestampValidator timestampValidator = new JwtTimestampValidator(ALLOWED_CLOCK_SKEW);
+        timestampValidator.setClock(clock);
         this.delegate = new DelegatingOAuth2TokenValidator<>(
-                JwtValidators.createDefaultWithIssuer(properties.issuer()),
+                timestampValidator,
+                new JwtIssuerValidator(properties.issuer()),
                 new JwtAudienceValidator(properties.audience()),
                 new JwtClaimValidator<>("sub", subject -> subject instanceof String value
                         && properties.allowedCallers().contains(value)),

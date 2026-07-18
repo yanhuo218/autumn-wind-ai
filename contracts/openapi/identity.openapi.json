@@ -1557,7 +1557,7 @@
           "loginLockMinutes": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 10080
+            "maximum": 1440
           },
           "termsAcceptanceRequired": {
             "type": "boolean"
@@ -1627,7 +1627,7 @@
           "loginLockMinutes": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 10080
+            "maximum": 1440
           },
           "termsAcceptanceRequired": {
             "type": "boolean"
@@ -1651,7 +1651,7 @@
       },
       "EmailDomainList": {
         "type": "array",
-        "maxItems": 1000,
+        "maxItems": 500,
         "uniqueItems": true,
         "items": {
           "type": "string",

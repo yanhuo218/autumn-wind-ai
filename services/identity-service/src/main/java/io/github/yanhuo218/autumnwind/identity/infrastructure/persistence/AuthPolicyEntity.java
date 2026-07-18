@@ -4,6 +4,7 @@ import io.github.yanhuo218.autumnwind.identity.domain.policy.DomainPolicyMode;
 import io.github.yanhuo218.autumnwind.identity.domain.policy.EmailDomainPolicy;
 import io.github.yanhuo218.autumnwind.identity.domain.policy.PasswordPolicy;
 import io.github.yanhuo218.autumnwind.identity.domain.policy.RegistrationPolicy;
+import io.github.yanhuo218.autumnwind.identity.domain.policy.AuthPolicySettings;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -18,7 +19,9 @@ import jakarta.persistence.Version;
 
 import java.time.Instant;
 import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 
 @Entity
 @Table(name = "auth_policies", schema = "identity")
@@ -83,7 +86,56 @@ public class AuthPolicyEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    protected AuthPolicyEntity() {
+    public AuthPolicyEntity() {
+    }
+
+    @Column(name = "updated_by")
+    private UUID updatedBy;
+
+    public AuthPolicySettings settings() {
+        return new AuthPolicySettings(
+                publicRegistrationEnabled,
+                emailVerificationRequired,
+                emailDomainPolicyMode,
+                emailDomains,
+                verificationTtlSeconds / 60,
+                verificationResendCooldownSeconds,
+                verificationFailureLimit,
+                passwordMinimumLength,
+                loginFailureLimit,
+                loginLockDurationSeconds / 60,
+                termsAcceptanceRequired,
+                privacyAcceptanceRequired
+        );
+    }
+
+    public long externalVersion() {
+        return version + 1;
+    }
+
+    public Instant updatedAt() {
+        return updatedAt;
+    }
+
+    public UUID updatedBy() {
+        return updatedBy;
+    }
+
+    public void apply(AuthPolicySettings settings, UUID actorUserId, Instant now) {
+        this.publicRegistrationEnabled = settings.publicRegistrationEnabled();
+        this.emailVerificationRequired = settings.emailVerificationRequired();
+        this.emailDomainPolicyMode = settings.emailDomainPolicyMode();
+        this.emailDomains = new LinkedHashSet<>(settings.emailDomains());
+        this.verificationTtlSeconds = settings.verificationTtlSeconds();
+        this.verificationResendCooldownSeconds = settings.verificationResendCooldownSeconds();
+        this.verificationFailureLimit = settings.verificationFailureLimit();
+        this.passwordMinimumLength = settings.passwordMinimumLength();
+        this.loginFailureLimit = settings.loginFailureLimit();
+        this.loginLockDurationSeconds = settings.loginLockDurationSeconds();
+        this.termsAcceptanceRequired = settings.termsAcceptanceRequired();
+        this.privacyAcceptanceRequired = settings.privacyAcceptanceRequired();
+        this.updatedBy = Objects.requireNonNull(actorUserId, "操作者不能为空。");
+        this.updatedAt = Objects.requireNonNull(now, "更新时间不能为空。");
     }
 
     public RegistrationPolicy registrationPolicy() {

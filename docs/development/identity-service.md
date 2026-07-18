@@ -41,11 +41,14 @@ mvn "-Dmaven.repo.local=$((Resolve-Path .).Path)\.m2\repository" -pl services/id
 
 - 浏览器只持有高熵不透明会话 Token，数据库只保存 SHA-256 Hash。
 - CSRF 使用独立的 Cookie Token Repository，不与会话表混用；V2 迁移已删除早期设计中的会话 CSRF Hash 字段。
+- 认证策略管理使用 `ETag` 与 `If-Match` 防止覆盖并发修改；V3 迁移增加可选的 `updated_by` 操作者标识。
 - Gateway 通过受 Service JWT 保护的 introspection 接口同步校验会话，账户禁用后旧会话立即失效。
 - 会话 Cookie 必须使用 `HttpOnly`、`Secure` 和适当的 `SameSite`，所有浏览器状态变更请求必须校验 CSRF。
 - 邮箱域策略显式选择 `ALLOWLIST` 或 `BLOCKLIST`，两种模式不能同时生效。
 - 邮箱域名先做 IDNA ASCII、大小写和末尾点规范化，再执行完整域名精确匹配；V1 不支持通配符。
 - 关闭公开注册不影响已有用户登录和管理员创建账户。
+
+管理员通过 `GET /api/v1/admin/auth-policy` 读取完整认证策略，通过 `PUT /api/v1/admin/auth-policy` 更新策略。更新请求必须携带管理员会话、CSRF Token 和上次读取到的 `ETag`；版本不匹配返回 `409`，不会覆盖其他管理员的修改。邮箱域列表最多 500 项，登录锁定时长最多 1440 分钟，与数据库约束保持一致。
 
 浏览器首次进入认证页面时，应先请求 `GET /api/v1/auth/csrf`。服务返回 HttpOnly 的 `AW_CSRF` Cookie，并在响应正文和 `X-CSRF-TOKEN` Header 中返回对应的掩码 Token。后续注册、登录和注销请求必须由浏览器自动携带 `AW_CSRF` Cookie，同时把掩码 Token 放入 `X-CSRF-TOKEN` Header；前端不得尝试读取 Cookie，也不得记录 Token。
 
