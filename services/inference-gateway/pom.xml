@@ -17,6 +17,12 @@
 
     <dependencies>
         <dependency>
+            <groupId>io.github.yanhuo218</groupId>
+            <artifactId>secret-store</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
