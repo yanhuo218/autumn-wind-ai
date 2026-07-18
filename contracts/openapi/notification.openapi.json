@@ -34,6 +34,7 @@
           "401": {"$ref": "#/components/responses/Unauthorized"},
           "403": {"$ref": "#/components/responses/Forbidden"},
           "404": {"$ref": "#/components/responses/NotFound"},
+          "406": {"$ref": "#/components/responses/NotAcceptable"},
           "500": {"$ref": "#/components/responses/InternalServerError"}
         }
       },
@@ -68,6 +69,8 @@
           "401": {"$ref": "#/components/responses/Unauthorized"},
           "403": {"$ref": "#/components/responses/Forbidden"},
           "409": {"$ref": "#/components/responses/Conflict"},
+          "406": {"$ref": "#/components/responses/NotAcceptable"},
+          "415": {"$ref": "#/components/responses/UnsupportedMediaType"},
           "500": {"$ref": "#/components/responses/InternalServerError"}
         }
       }
@@ -104,6 +107,8 @@
           "401": {"$ref": "#/components/responses/Unauthorized"},
           "403": {"$ref": "#/components/responses/Forbidden"},
           "409": {"$ref": "#/components/responses/Conflict"},
+          "406": {"$ref": "#/components/responses/NotAcceptable"},
+          "415": {"$ref": "#/components/responses/UnsupportedMediaType"},
           "500": {"$ref": "#/components/responses/InternalServerError"}
         }
       }
@@ -115,12 +120,17 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "由 Gateway 或获准管理服务提交的短时 Service JWT，必须具备 Notification 管理 scope；管理写操作还必须携带 actor_user_id UUID 声明。"
+        "description": "由 Gateway 或获准管理服务提交的短时 Service JWT，必须具备 notification.smtp.manage scope；管理写操作还必须携带 actor_user_id UUID 声明。"
       }
     },
     "responses": {
       "BadRequest": {
         "description": "请求字段或 SMTP 设置不合法。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
         "content": {
           "application/json": {
             "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
@@ -129,6 +139,11 @@
       },
       "Unauthorized": {
         "description": "Service JWT 缺失或无效。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
         "content": {
           "application/json": {
             "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
@@ -137,6 +152,11 @@
       },
       "Forbidden": {
         "description": "调用方缺少 Notification 管理权限。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
         "content": {
           "application/json": {
             "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
@@ -145,6 +165,11 @@
       },
       "NotFound": {
         "description": "SMTP 配置尚未创建。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
         "content": {
           "application/json": {
             "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
@@ -153,6 +178,11 @@
       },
       "Conflict": {
         "description": "配置版本冲突或当前配置不能创建测试任务。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
         "content": {
           "application/json": {
             "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
@@ -161,6 +191,37 @@
       },
       "InternalServerError": {
         "description": "服务内部或 SecretStore 错误；SMTP 操作失败关闭。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
+          }
+        }
+      },
+      "NotAcceptable": {
+        "description": "客户端声明的响应媒体类型不受支持。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
+          }
+        }
+      },
+      "UnsupportedMediaType": {
+        "description": "请求媒体类型不受支持。",
+        "headers": {
+          "X-Correlation-ID": {
+            "$ref": "./common.openapi.json#/components/headers/CorrelationId"
+          }
+        },
         "content": {
           "application/json": {
             "schema": {"$ref": "./common.openapi.json#/components/schemas/ErrorResponse"}
@@ -258,7 +319,7 @@
       },
       "TestEmailJobView": {
         "type": "object",
-        "additionalProperties": true,
+        "additionalProperties": false,
         "required": ["jobId", "status", "createdAt"],
         "properties": {
           "jobId": {"type": "string", "format": "uuid"},

@@ -107,6 +107,34 @@ foreach ($path in $requiredNotificationPaths) {
         throw "Notification OpenAPI 缺少必要路径：$path"
     }
 }
+$notificationGet = $notificationOpenApi.paths."/api/v1/admin/notification/smtp-config".get
+$notificationUpdate = $notificationOpenApi.paths."/api/v1/admin/notification/smtp-config".put
+$notificationTestEmail = $notificationOpenApi.paths."/api/v1/admin/notification/test-emails".post
+foreach ($operation in @($notificationGet, $notificationUpdate, $notificationTestEmail)) {
+    if ("406" -notin @($operation.responses.PSObject.Properties.Name)) {
+        throw "Notification 已实现接口必须声明统一 406 响应。"
+    }
+}
+foreach ($operation in @($notificationUpdate, $notificationTestEmail)) {
+    if ("415" -notin @($operation.responses.PSObject.Properties.Name)) {
+        throw "Notification 带请求体接口必须声明统一 415 响应。"
+    }
+}
+$notificationErrorResponses = @(
+    $notificationOpenApi.components.responses.BadRequest,
+    $notificationOpenApi.components.responses.Unauthorized,
+    $notificationOpenApi.components.responses.Forbidden,
+    $notificationOpenApi.components.responses.NotFound,
+    $notificationOpenApi.components.responses.Conflict,
+    $notificationOpenApi.components.responses.InternalServerError,
+    $notificationOpenApi.components.responses.NotAcceptable,
+    $notificationOpenApi.components.responses.UnsupportedMediaType
+)
+foreach ($response in $notificationErrorResponses) {
+    if ($null -eq $response.headers."X-Correlation-ID") {
+        throw "Notification 错误响应必须声明 X-Correlation-ID。"
+    }
+}
 $smtpUpdate = $notificationOpenApi.components.schemas.SmtpConfigUpdateRequest
 $smtpPasswordIsNotWriteOnly = $smtpUpdate.properties.password.writeOnly -ne $true
 $smtpPasswordAppearsInView = $null -ne $notificationOpenApi.components.schemas.SmtpConfigView.properties.password
@@ -121,6 +149,14 @@ $clearPasswordRuleMissesFlag = "clearPassword" -notin $clearPasswordRequiredFiel
 $clearPasswordRuleAllowsTrue = $clearPasswordRule.properties.clearPassword.const -ne $true
 if ($clearPasswordRuleMissesPassword -or $clearPasswordRuleMissesFlag -or $clearPasswordRuleAllowsTrue) {
     throw "Notification SMTP 密码与 clearPassword=true 必须互斥。"
+}
+$notificationSecurityDescription = $notificationOpenApi.components.securitySchemes.ServiceJwt.description
+if ($notificationSecurityDescription -notmatch "notification\.smtp\.manage") {
+    throw "Notification Service JWT 必须声明稳定的 SMTP 管理 scope。"
+}
+$testEmailJobView = $notificationOpenApi.components.schemas.TestEmailJobView
+if ($testEmailJobView.additionalProperties -ne $false) {
+    throw "Notification 测试邮件任务响应不能允许未声明字段。"
 }
 
 $policyRequest = $identityOpenApi.components.schemas.AuthPolicyUpdateRequest
