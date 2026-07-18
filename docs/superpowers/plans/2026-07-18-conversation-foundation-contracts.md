@@ -70,7 +70,7 @@
 - 产出：`ContentBlock.text(String)`、`ContentBlock.imageReference(UUID)`、`ContentBlock.fileReference(UUID)`。
 - 产出：`MessageContent(int schemaVersion, List<ContentBlock> blocks)`，当前版本固定为 `1`。
 
-- [ ] **Step 1：建立缺失模块的构建红灯**
+- [x] **Step 1：建立缺失模块的构建红灯**
 
 先只在根 `pom.xml` 的 `<modules>` 中加入：
 
@@ -86,7 +86,7 @@ mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/conversation-service t
 
 预期：构建因 `services/conversation-service/pom.xml` 不存在而失败，证明 reactor 确实要求新模块。
 
-- [ ] **Step 2：创建最小模块与配置并恢复构建**
+- [x] **Step 2：创建最小模块与配置并恢复构建**
 
 `services/conversation-service/pom.xml` 继承根 POM，并加入以下依赖：
 
@@ -192,7 +192,7 @@ management:
 
 再次运行 Step 1 命令，预期 `BUILD SUCCESS` 且没有测试。
 
-- [ ] **Step 3：编写生成状态红灯测试**
+- [x] **Step 3：编写生成状态红灯测试**
 
 测试必须覆盖所有合法边、禁止回退、终态不可变和 `null`：
 
@@ -229,7 +229,7 @@ mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/conversation-service "
 
 预期：因 `GenerationStatus` 不存在而编译失败。
 
-- [ ] **Step 4：实现最小生成状态机并观察绿灯**
+- [x] **Step 4：实现最小生成状态机并观察绿灯**
 
 枚举值固定为 `PENDING`、`STREAMING`、`SUCCEEDED`、`FAILED`、`STOPPED`、`INTERRUPTED`。合法边固定为：
 
@@ -240,7 +240,7 @@ STREAMING -> SUCCEEDED, FAILED, STOPPED, INTERRUPTED
 
 `terminal()` 只对 `SUCCEEDED`、`FAILED`、`STOPPED`、`INTERRUPTED` 返回 `true`；同状态转换也返回 `false`。运行 Step 3 命令，预期全部通过。
 
-- [ ] **Step 5：编写消息内容红灯测试**
+- [x] **Step 5：编写消息内容红灯测试**
 
 测试必须证明文本去除首尾空白、空文本被拒绝、引用 ID 不可空、块集合被防御性复制、空集合和非版本 1 被拒绝：
 
@@ -279,7 +279,7 @@ mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/conversation-service "
 
 预期：因消息内容类型不存在而编译失败。
 
-- [ ] **Step 6：实现最小消息内容类型并观察绿灯**
+- [x] **Step 6：实现最小消息内容类型并观察绿灯**
 
 `ContentBlock` 使用单个 record 和三个静态工厂提供清晰入口；公共规范构造器必须执行同样的互斥校验，不能让调用方组合冲突字段：
 
@@ -307,7 +307,7 @@ public record ContentBlock(ContentBlockType type, String text, UUID resourceId) 
 
 record 的规范构造器必须再次校验 `type` 与 `text/resourceId` 的互斥关系，防止调用公共构造器绕过静态工厂。`MessageContent` 使用 `List.copyOf`。运行 Step 5 命令，预期全部通过。
 
-- [ ] **Step 7：运行 Task 1 验证**
+- [x] **Step 7：运行 Task 1 验证**
 
 ```powershell
 mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/conversation-service -am test
