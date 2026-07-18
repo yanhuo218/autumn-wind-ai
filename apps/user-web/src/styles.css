@@ -459,8 +459,34 @@ input:focus-visible {
 
 .aw-message-list__actions {
   display: flex;
+  align-items: flex-start;
   gap: 4px;
   margin-top: 8px;
+}
+
+.aw-generation-actions {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.aw-generation-actions__error {
+  min-width: 0;
+  max-width: min(44ch, 100%);
+  color: var(--aw-rust);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.aw-generation-actions__summary,
+.aw-generation-actions__correlation-id {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.aw-generation-actions__correlation-id {
+  color: var(--aw-muted);
 }
 
 .aw-mobile-sidebar-content {
@@ -543,7 +569,8 @@ input:focus-visible {
 }
 
 .aw-state-rail--interrupted,
-.aw-state-rail--syncing {
+.aw-state-rail--syncing,
+.aw-state-rail--reconnecting {
   border-left-color: var(--aw-amber);
   color: var(--aw-amber);
 }

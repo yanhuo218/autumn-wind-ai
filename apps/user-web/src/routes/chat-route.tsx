@@ -188,9 +188,11 @@ export function ChatRoute({
           <MessageList
             messages={displayedMessages}
             activeGeneration={session.activeGeneration}
+            connectionState={session.connectionState}
             error={session.error}
             onCopy={copyToClipboard}
             onStop={() => session.stop()}
+            onRegenerate={session.regenerate}
           />
         ) : (
           <EmptyConversationState hasConversation={Boolean(conversationId || detailQuery.data)} />

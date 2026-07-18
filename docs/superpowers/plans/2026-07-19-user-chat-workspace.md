@@ -679,7 +679,14 @@ feat: 完成文本发送与停止闭环
 - 新建：`apps/user-web/src/features/conversation/components/generation-actions.tsx`
 - 新建：`apps/user-web/src/features/conversation/components/generation-actions.test.tsx`
 - 修改：`apps/user-web/src/features/conversation/state/use-conversation-session.ts`
+- 修改：`apps/user-web/src/features/conversation/api/conversation-client.ts`
+- 修改：`apps/user-web/src/features/conversation/api/conversation-client.test.ts`
 - 修改：`apps/user-web/src/features/conversation/components/message-list.tsx`
+- 修改：`apps/user-web/src/features/conversation/components/message-list.test.tsx`
+- 修改：`apps/user-web/src/features/conversation/components/generation-state-rail.tsx`
+- 修改：`apps/user-web/src/features/conversation/components/generation-state-rail.test.tsx`
+- 修改：`apps/user-web/src/routes/chat-route.tsx`
+- 修改：`apps/user-web/src/styles.css`
 - 修改：`scripts/mock-conversation-api.mjs`
 - 修改：`scripts/tests/mock-conversation-api.test.mjs`
 
@@ -696,27 +703,27 @@ export interface GenerationStreamControllerOptions {
 }
 ```
 
-- [ ] **Step 1：先写重连红灯测试**
+- [x] **Step 1：先写重连红灯测试**
 
 模拟流在非终态关闭；下一次请求必须携带最后 `eventId`，退避固定 `250/500/1000/2000/4000ms`，最多 5 次。使用注入 `sleep` 和假时钟，不在单元测试真实等待。Conversation Mock 新增 `disconnect-once` 场景：首次订阅在至少一条 `content.delta` 后主动关闭连接但保持非终态；携带最后事件 ID 的后续订阅继续到终态。Mock 回归测试必须证明只断开一次、续传内容不重复且最终成功。
 
-- [ ] **Step 2：先写 reset 红灯测试**
+- [x] **Step 2：先写 reset 红灯测试**
 
 收到 `replay.reset` 后必须：进入 `SYNCING` -> 请求 `snapshotUrl` 对应生成快照 -> 原子替换内容/状态 -> 非终态时用 reset eventId 继续订阅。快照请求失败不得把旧内容标为完成。
 
-- [ ] **Step 3：实现流控制器**
+- [x] **Step 3：实现流控制器**
 
 控制器不操作 DOM；只协调 Client、重连、快照和回调。终态后不重连；用户 stop 后允许消费 `generation.stopped`，随后结束。
 
-- [ ] **Step 4：实现失败/中断/重新生成操作**
+- [x] **Step 4：实现失败/中断/重新生成操作**
 
 FAILED 和 INTERRUPTED 显示稳定错误摘要、关联 ID 和重新生成按钮；STOPPED 允许重新生成。重新生成每次创建新 `clientRequestId`，成功后切换到新 `generationId/eventsUrl`，不覆盖旧结果对象。
 
-- [ ] **Step 5：验证无障碍播报**
+- [x] **Step 5：验证无障碍播报**
 
 测试生命周期只播报开始、停止、失败、中断、重连、同步完成和完成；多个 `content.delta` 不改变 live region 文案。错误详情不得包含端点、凭据或内部堆栈。
 
-- [ ] **Step 6：运行 Task 7 验证并提交**
+- [x] **Step 6：运行 Task 7 验证并提交**
 
 ```powershell
 pnpm --filter @autumn-wind/user-web test

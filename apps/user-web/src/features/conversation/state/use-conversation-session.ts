@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
+  GenerationAcceptedView,
   ConversationView,
   GenerationCreateRequest,
   GenerationView
@@ -9,11 +10,11 @@ import { HttpError } from '../../../lib/http-error';
 import { conversationKeys, queryClient } from '../../../lib/query-client';
 import type { ConversationClient } from '../api/conversation-client';
 import {
-  createGenerationUiState,
   generationReducer,
   replaceGenerationSnapshot
 } from './generation-reducer';
 import type { GenerationUiState } from './generation-state';
+import { consumeGenerationStream } from './generation-stream-controller';
 
 export interface SubmitMessageInput {
   text: string;
@@ -29,7 +30,9 @@ export interface ConversationSessionError {
 export interface ConversationSession {
   submit(input: SubmitMessageInput): Promise<void>;
   stop(): Promise<void>;
+  regenerate(generationId: string): Promise<void>;
   activeGeneration?: GenerationUiState;
+  connectionState: 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED';
   submitting: boolean;
   error?: ConversationSessionError;
 }
@@ -38,6 +41,7 @@ export interface UseConversationSessionOptions {
   conversationClient: ConversationClient;
   conversationId?: string;
   onConversationCreated?: (conversationId: string) => void;
+  streamSleep?: (milliseconds: number) => Promise<void>;
 }
 
 function isTerminal(status: GenerationUiState['status']): boolean {
@@ -54,7 +58,7 @@ function publicError(error: unknown): ConversationSessionError {
     return {
       code: error.code,
       message: error.message,
-      correlationId: error.correlationId
+      correlationId: publicCorrelationId(error.correlationId)
     };
   }
 
@@ -62,6 +66,14 @@ function publicError(error: unknown): ConversationSessionError {
     code: 'AW-CONVERSATION-CLIENT-0001',
     message: '生成连接失败'
   };
+}
+
+const correlationIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function publicCorrelationId(correlationId?: string): string | undefined {
+  return correlationId && correlationIdPattern.test(correlationId)
+    ? correlationId
+    : undefined;
 }
 
 function snapshotError(snapshot: GenerationView): ConversationSessionError | undefined {
@@ -72,7 +84,7 @@ function snapshotError(snapshot: GenerationView): ConversationSessionError | und
   return {
     code: snapshot.error.code,
     message: snapshot.error.message,
-    correlationId: snapshot.error.correlationId
+    correlationId: publicCorrelationId(snapshot.error.correlationId)
   };
 }
 
@@ -104,11 +116,13 @@ function invalidateConversationQueries(conversationId: string): void {
 export function useConversationSession({
   conversationClient,
   conversationId,
-  onConversationCreated
+  onConversationCreated,
+  streamSleep
 }: UseConversationSessionOptions): ConversationSession {
   const [activeGeneration, setActiveGeneration] = useState<GenerationUiState>();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<ConversationSessionError>();
+  const [connectionState, setConnectionState] = useState<'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED'>('DISCONNECTED');
   const activeGenerationRef = useRef<GenerationUiState | undefined>(undefined);
   const submittingRef = useRef(false);
   const conversationIdRef = useRef(conversationId);
@@ -125,6 +139,7 @@ export function useConversationSession({
       setActiveGeneration(undefined);
       setSubmitting(false);
       setError(undefined);
+      setConnectionState('DISCONNECTED');
     }
     previousRouteConversationIdRef.current = conversationId;
     conversationIdRef.current = conversationId;
@@ -135,65 +150,58 @@ export function useConversationSession({
     setActiveGeneration(next);
   }, []);
 
-  const consumeStream = useCallback(
-    async (eventsUrl: string, generation: GenerationUiState, controller: AbortController) => {
-      let current = generation;
-
-      try {
-        for await (const event of conversationClient.streamGeneration(
-          eventsUrl,
-          current.lastEventId,
-          controller.signal
-        )) {
-          if (controller.signal.aborted) {
+  const consumeAccepted = useCallback(
+    async (accepted: GenerationAcceptedView, controller: AbortController) => {
+      await consumeGenerationStream({
+        accepted,
+        client: conversationClient,
+        signal: controller.signal,
+        sleep: streamSleep,
+        onEvent: (event) => {
+          const current = activeGenerationRef.current;
+          if (!current || current.generationId !== event.generationId) {
             return;
           }
-
-          current = generationReducer(current, event);
-          updateGeneration(current);
-
-          if (event.eventType === 'replay.reset') {
-            const refreshed = await conversationClient.getGeneration(current.generationId, controller.signal);
-            current = replaceGenerationSnapshot(current, refreshed);
-            updateGeneration(current);
-            setError(snapshotError(refreshed));
+          updateGeneration(generationReducer(current, event));
+        },
+        onSnapshot: (snapshot) => {
+          const current = activeGenerationRef.current;
+          if (!current || current.generationId !== snapshot.generationId) {
+            return;
           }
-        }
+          updateGeneration(replaceGenerationSnapshot(current, snapshot));
+          setError(snapshotError(snapshot));
+        },
+        onConnectionState: setConnectionState
+      });
 
-        if (isTerminal(current.status)) {
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      const current = activeGenerationRef.current;
+      if (current && isTerminal(current.status)) {
+        setError(current.error ? {
+          code: current.error.code,
+          message: current.error.message,
+          correlationId: publicCorrelationId(current.error.correlationId)
+        } : undefined);
+        if (current.status === 'SUCCEEDED' || current.status === 'STOPPED') {
           setError(undefined);
-          setSubmitting(false);
-          submittingRef.current = false;
-          if (conversationIdRef.current) {
-            invalidateConversationQueries(conversationIdRef.current);
-          }
-        } else {
-          setError({ code: 'AW-CONVERSATION-CLIENT-0002', message: '生成连接已断开' });
-          setSubmitting(false);
-          submittingRef.current = false;
         }
-      } catch (reason) {
-        if (controller.signal.aborted) {
-          return;
+        if (conversationIdRef.current) {
+          invalidateConversationQueries(conversationIdRef.current);
         }
-
-        try {
-          const refreshed = await conversationClient.getGeneration(current.generationId, controller.signal);
-          current = replaceGenerationSnapshot(current, refreshed);
-          updateGeneration(current);
-          setError(snapshotError(refreshed) ?? publicError(reason));
-        } catch (snapshotReason) {
-          setError(publicError(snapshotReason));
-        }
-        setSubmitting(false);
-        submittingRef.current = false;
-      } finally {
-        if (streamControllerRef.current === controller) {
-          streamControllerRef.current = undefined;
-        }
+      } else {
+        setError({ code: 'AW-CONVERSATION-CLIENT-0002', message: '生成连接已断开' });
+      }
+      setSubmitting(false);
+      submittingRef.current = false;
+      if (streamControllerRef.current === controller) {
+        streamControllerRef.current = undefined;
       }
     },
-    [conversationClient, updateGeneration]
+    [conversationClient, streamSleep, updateGeneration]
   );
 
   const submit = useCallback(
@@ -228,6 +236,10 @@ export function useConversationSession({
           onConversationCreated?.(activeConversationId);
         }
 
+        if (controller.signal.aborted) {
+          return;
+        }
+
         let accepted;
         try {
           accepted = await conversationClient.createGeneration(activeConversationId, request, controller.signal);
@@ -238,10 +250,14 @@ export function useConversationSession({
           accepted = await conversationClient.createGeneration(activeConversationId, request, controller.signal);
         }
 
+        if (controller.signal.aborted) {
+          return;
+        }
+
         const pending = pendingGeneration(accepted.generationId);
         updateGeneration(pending);
         invalidateConversationQueries(activeConversationId);
-        await consumeStream(accepted.eventsUrl, pending, controller);
+        await consumeAccepted(accepted, controller);
       } catch (reason) {
         if (!controller.signal.aborted) {
           setError(publicError(reason));
@@ -250,7 +266,44 @@ export function useConversationSession({
         }
       }
     },
-    [conversationClient, consumeStream, onConversationCreated, updateGeneration]
+    [conversationClient, consumeAccepted, onConversationCreated, updateGeneration]
+  );
+
+  const regenerate = useCallback(
+    async (generationId: string) => {
+      if (submittingRef.current || !conversationIdRef.current) {
+        return;
+      }
+
+      submittingRef.current = true;
+      setSubmitting(true);
+      setError(undefined);
+      streamControllerRef.current?.abort();
+
+      const controller = new AbortController();
+      streamControllerRef.current = controller;
+      try {
+        const accepted = await conversationClient.regenerate(
+          generationId,
+          { clientRequestId: crypto.randomUUID() },
+          controller.signal
+        );
+        if (controller.signal.aborted) {
+          return;
+        }
+        updateGeneration(pendingGeneration(accepted.generationId));
+        invalidateConversationQueries(conversationIdRef.current);
+        await consumeAccepted(accepted, controller);
+      } catch (reason) {
+        if (!controller.signal.aborted) {
+          setError(publicError(reason));
+          setSubmitting(false);
+          submittingRef.current = false;
+          streamControllerRef.current = undefined;
+        }
+      }
+    },
+    [conversationClient, consumeAccepted, updateGeneration]
   );
 
   const stop = useCallback(async () => {
@@ -287,5 +340,5 @@ export function useConversationSession({
     };
   }, []);
 
-  return { submit, stop, activeGeneration, submitting, error };
+  return { submit, stop, regenerate, activeGeneration, connectionState, submitting, error };
 }

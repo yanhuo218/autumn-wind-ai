@@ -177,6 +177,20 @@ describe('ConversationClient', () => {
     await expect(client.regenerate(generationId, { clientRequestId: requestId })).resolves.toEqual(accepted);
   });
 
+  it('按 replay.reset 提供的同源快照路径读取生成状态', async () => {
+    const snapshotUrl = `/api/v1/generations/${generationId}?snapshot=reset`;
+    const fetchImpl: typeof fetch = vi.fn(async (input) => {
+      expect(input).toBe(snapshotUrl);
+      return jsonResponse(generation);
+    });
+    const client = createConversationClient(fetchImpl);
+
+    await expect(client.getGenerationSnapshot(snapshotUrl)).resolves.toEqual(generation);
+    await expect(client.getGenerationSnapshot('https://private.example/snapshot')).rejects.toMatchObject({
+      code: 'PROTOCOL_ERROR'
+    });
+  });
+
   it('将合法公共错误转换为受限 HttpError', async () => {
     const fetchImpl: typeof fetch = vi.fn(async () =>
       jsonResponse(

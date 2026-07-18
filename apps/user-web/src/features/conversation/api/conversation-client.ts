@@ -34,6 +34,7 @@ export interface ConversationClient {
     signal?: AbortSignal
   ): Promise<GenerationAcceptedView>;
   getGeneration(generationId: string, signal?: AbortSignal): Promise<GenerationView>;
+  getGenerationSnapshot(snapshotUrl: string, signal?: AbortSignal): Promise<GenerationView>;
   streamGeneration(
     eventsUrl: string,
     lastEventId?: string,
@@ -109,6 +110,11 @@ export function createConversationClient(fetchImpl: typeof fetch = fetch): Conve
 
     getGeneration(generationId, signal) {
       return fetchJson(fetchImpl, generationPath(generationId), isGenerationView, { signal });
+    },
+
+    async getGenerationSnapshot(snapshotUrl, signal) {
+      assertApiPath(snapshotUrl);
+      return fetchJson(fetchImpl, snapshotUrl, isGenerationView, { signal });
     },
 
     async *streamGeneration(eventsUrl, lastEventId, signal) {

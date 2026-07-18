@@ -14,7 +14,8 @@ it.each([
   ['STOPPED', '已停止', 'false'],
   ['INTERRUPTED', '生成中断', 'false'],
   ['FAILED', '生成失败', 'false'],
-  ['SYNCING', '正在同步', 'true']
+  ['SYNCING', '正在同步', 'true'],
+  ['RECONNECTING', '正在重新连接', 'true']
 ] as const)('为 %s 状态提供可访问生命周期播报和 aria-busy', (status, text, busy) => {
   render(<GenerationStateRail status={status} />);
 

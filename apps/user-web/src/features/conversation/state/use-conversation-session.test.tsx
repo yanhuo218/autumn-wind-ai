@@ -72,6 +72,7 @@ function client(overrides: Partial<ConversationClient> = {}): ConversationClient
     archiveConversation: vi.fn(),
     createGeneration: vi.fn(async () => accepted()),
     getGeneration: vi.fn(async () => snapshot()),
+    getGenerationSnapshot: vi.fn(async () => snapshot()),
     streamGeneration: vi.fn(async function* () {}),
     stopGeneration: vi.fn(async () => snapshot({ status: 'STOPPED' })),
     regenerate: vi.fn(),
@@ -185,6 +186,69 @@ it('流式事件经 generationReducer 更新正文并在完成后进入 SUCCEEDE
   await waitFor(() => expect(result.result.current.activeGeneration?.status).toBe('SUCCEEDED'));
   expect(result.result.current.activeGeneration?.content).toBe('第一段第二段');
   expect(result.result.current.submitting).toBe(false);
+});
+
+it('非终态断流后携带最后 eventId 重连并完成生成', async () => {
+  const started = event('generation.started', 1, { status: 'STREAMING' });
+  const delta = event('content.delta', 2, { delta: '断流前' });
+  const completed = event('generation.completed', 3, { status: 'SUCCEEDED' });
+  const streamGeneration = vi.fn((_url: string, lastEventId?: string) => (
+    lastEventId === undefined
+      ? (async function* () { yield started; yield delta; })()
+      : (async function* () { yield completed; })()
+  ));
+  const streamSleep = vi.fn(async () => undefined);
+  const result = renderHook(() =>
+    useConversationSession({
+      conversationClient: client({ streamGeneration }),
+      conversationId,
+      streamSleep
+    })
+  );
+
+  await act(async () => {
+    await result.result.current.submit({ text: 'Reconnect', modelId });
+  });
+
+  expect(streamGeneration).toHaveBeenNthCalledWith(2, accepted().eventsUrl, delta.eventId, expect.any(AbortSignal));
+  expect(streamSleep).toHaveBeenCalledWith(250);
+  expect(result.result.current.activeGeneration).toMatchObject({
+    status: 'SUCCEEDED',
+    content: '断流前'
+  });
+});
+
+it('重新生成使用新的 clientRequestId 并切换到新 generationId', async () => {
+  const nextGenerationId = '00000000-0000-4000-8000-000000000206';
+  const regenerate = vi.fn(async () => accepted({ generationId: nextGenerationId }));
+  const streamGeneration = vi.fn(async function* () {
+    yield {
+      ...event('generation.completed', 1, { status: 'SUCCEEDED' }),
+      generationId: nextGenerationId
+    };
+  });
+  vi.stubGlobal('crypto', {
+    randomUUID: vi.fn(() => '00000000-0000-4000-8000-000000000207')
+  });
+  const result = renderHook(() =>
+    useConversationSession({
+      conversationClient: client({ regenerate, streamGeneration }),
+      conversationId,
+      streamSleep: vi.fn(async () => undefined)
+    })
+  );
+
+  await act(async () => {
+    await result.result.current.regenerate(generationId);
+  });
+
+  expect(regenerate).toHaveBeenCalledWith(
+    generationId,
+    { clientRequestId: '00000000-0000-4000-8000-000000000207' },
+    expect.any(AbortSignal)
+  );
+  expect(result.result.current.activeGeneration?.generationId).toBe(nextGenerationId);
+  expect(result.result.current.activeGeneration?.status).toBe('SUCCEEDED');
 });
 
 it('停止调用保留服务端部分文本并进入 STOPPED', async () => {

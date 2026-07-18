@@ -68,10 +68,43 @@ describe('MessageList', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '复制回答' }));
     fireEvent.click(screen.getByRole('button', { name: '停止生成' }));
-    fireEvent.click(screen.getByRole('button', { name: '重新生成' }));
 
     expect(onCopy).toHaveBeenCalledWith(expect.stringContaining('Mock streamed'));
     expect(onStop).toHaveBeenCalledOnce();
+  });
+
+  it('失败状态提供重新生成图标按钮', () => {
+    const onRegenerate = vi.fn();
+    render(
+      <MessageList
+        messages={[assistantMessage]}
+        activeGeneration={{
+          ...activeGeneration,
+          status: 'FAILED',
+          error: {
+            code: 'AW-TEST',
+            message: '上游响应超时',
+            correlationId: '33333333-3333-4333-8333-333333333333'
+          }
+        }}
+        onRegenerate={onRegenerate}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '重新生成' }));
     expect(onRegenerate).toHaveBeenCalledWith(assistantMessage.generationId);
+  });
+
+  it('重连时播报重新连接并保持助手消息忙碌语义', () => {
+    render(
+      <MessageList
+        messages={[assistantMessage]}
+        activeGeneration={activeGeneration}
+        connectionState="RECONNECTING"
+      />
+    );
+
+    expect(screen.getByTestId('generation-state-rail-container').getAttribute('data-status')).toBe('RECONNECTING');
+    expect(screen.getByRole('article').getAttribute('aria-busy')).toBe('true');
   });
 });

@@ -1,10 +1,11 @@
 import type { MessageContent, MessageView } from '@autumn-wind/api-contracts';
-import { CircleAlert, Clipboard, RotateCcw, Square } from 'lucide-react';
+import { CircleAlert, Clipboard, Square } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { IconButton } from '../../../components/icon-button';
 import type { GenerationUiState } from '../state/generation-state';
+import { GenerationActions } from './generation-actions';
 import { GenerationStateRail, normalizePublicSummary } from './generation-state-rail';
 
 export interface MessageListProps {
@@ -14,6 +15,7 @@ export interface MessageListProps {
   onCopy?: (text: string) => Promise<void> | void;
   onStop?: () => Promise<void> | void;
   onRegenerate?: (generationId: string) => Promise<void> | void;
+  connectionState?: 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED';
 }
 
 function contentToText(content: MessageContent): string {
@@ -29,13 +31,33 @@ const busyStatuses = new Set<GenerationUiState['status']>([
   'SYNCING'
 ]);
 
+const recoverableStatuses = new Set<GenerationUiState['status']>([
+  'FAILED',
+  'INTERRUPTED',
+  'STOPPED'
+]);
+
+function isTerminalStatus(status: GenerationUiState['status']): boolean {
+  return status === 'SUCCEEDED' || status === 'FAILED' || status === 'STOPPED' || status === 'INTERRUPTED';
+}
+
+function isRecoverableStatus(
+  generation: GenerationUiState | undefined,
+  generationId: string
+): boolean {
+  return Boolean(
+    generation?.generationId === generationId && recoverableStatuses.has(generation.status)
+  );
+}
+
 export function MessageList({
   messages,
   activeGeneration,
   error,
   onCopy,
   onStop,
-  onRegenerate
+  onRegenerate,
+  connectionState = 'DISCONNECTED'
 }: MessageListProps) {
   return (
     <div aria-label="消息列表" className="aw-message-list">
@@ -67,7 +89,9 @@ export function MessageList({
 
         return (
           <article
-            aria-busy={isActive && activeGeneration ? busyStatuses.has(activeGeneration.status) : false}
+            aria-busy={isActive && activeGeneration
+              ? busyStatuses.has(activeGeneration.status) || connectionState === 'RECONNECTING'
+              : false}
             className="aw-message-list__assistant"
             key={message.messageId}
           >
@@ -75,7 +99,9 @@ export function MessageList({
               <GenerationStateRail
                 contentDelta={activeGeneration.content}
                 errorSummary={activeGeneration.error?.message}
-                status={activeGeneration.status}
+                status={connectionState === 'RECONNECTING' && !isTerminalStatus(activeGeneration.status)
+                  ? 'RECONNECTING'
+                  : activeGeneration.status}
               />
             ) : null}
             <div className="aw-message-list__markdown">
@@ -97,13 +123,12 @@ export function MessageList({
                   <Square size={16} strokeWidth={1.8} />
                 </IconButton>
               ) : null}
-              {message.generationId && onRegenerate ? (
-                <IconButton
-                  label="重新生成"
-                  onClick={() => void onRegenerate(message.generationId as string)}
-                >
-                  <RotateCcw size={16} strokeWidth={1.8} />
-                </IconButton>
+              {message.generationId && onRegenerate && isRecoverableStatus(activeGeneration, message.generationId) ? (
+                <GenerationActions
+                  status={activeGeneration?.status ?? 'FAILED'}
+                  error={activeGeneration?.error}
+                  onRegenerate={() => onRegenerate(message.generationId as string)}
+                />
               ) : null}
             </div>
           </article>

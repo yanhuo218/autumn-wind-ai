@@ -9,7 +9,7 @@ import {
 
 import type { GenerationStatus } from '../state/generation-state';
 
-type RailStatus = GenerationStatus | 'SYNCING';
+export type RailStatus = GenerationStatus | 'SYNCING' | 'RECONNECTING';
 
 export const PUBLIC_SUMMARY_MAX_LENGTH = 120;
 const PUBLIC_SUMMARY_FALLBACK = '生成失败';
@@ -55,13 +55,15 @@ const statusMeta: Record<
   STOPPED: { label: '已停止', icon: Square },
   INTERRUPTED: { label: '生成中断', icon: RotateCcw },
   FAILED: { label: '生成失败', icon: CircleAlert },
-  SYNCING: { label: '正在同步', icon: LoaderCircle }
+  SYNCING: { label: '正在同步', icon: LoaderCircle },
+  RECONNECTING: { label: '正在重新连接', icon: LoaderCircle }
 };
 
 const busyStatuses: ReadonlySet<RailStatus> = new Set([
   'PENDING',
   'STREAMING',
-  'SYNCING'
+  'SYNCING',
+  'RECONNECTING'
 ]);
 
 export function GenerationStateRail({

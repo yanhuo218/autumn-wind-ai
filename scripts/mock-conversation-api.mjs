@@ -6,7 +6,7 @@ const port = parsePort(process.env.PORT);
 const conversations = new Map();
 const generations = new Map();
 const idempotentGenerations = new Map();
-const supportedScenarios = new Set(['success', 'slow', 'failed', 'interrupted', 'replay-reset']);
+const supportedScenarios = new Set(['success', 'slow', 'failed', 'interrupted', 'replay-reset', 'disconnect-once']);
 const errorCodes = Object.freeze({
   notFound: 'AW-CONVERSATION-NOT_FOUND-0001',
   conflict: 'AW-CONVERSATION-CONFLICT-0001',
@@ -217,7 +217,8 @@ function newGeneration(conversationId, request, scenario, correlationId, userMes
     appliedEventIds: new Set(),
     resetCursors: new Map(),
     eventPlanVersion: 1,
-    nextSequence: 1
+    nextSequence: 1,
+    disconnectOncePending: scenario === 'disconnect-once'
   };
   generation.events = buildEvents(generation, scenario, correlationId);
   generation.nextSequence = generation.events.length + 1;
@@ -342,6 +343,10 @@ async function streamEvents(request, response, generation) {
     const event = generation.events[index];
     applyEventOnce(generation, event);
     response.write(`id: ${event.eventId}\nevent: ${event.eventType}\ndata: ${JSON.stringify(event)}\n\n`);
+    if (generation.disconnectOncePending && event.eventType === 'content.delta') {
+      generation.disconnectOncePending = false;
+      return response.end();
+    }
     if (generation.scenario === 'slow' && index < generation.events.length - 1) {
       await delay(500);
     }

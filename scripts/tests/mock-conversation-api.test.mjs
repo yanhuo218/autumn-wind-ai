@@ -217,6 +217,26 @@ test('replay-reset 场景首先通知客户端替换本地内容', async () => {
   assert.equal(events[0].payload.snapshotUrl, accepted.statusUrl);
 });
 
+test('disconnect-once 首次在 content.delta 后断流，续传不重复并最终成功', async () => {
+  const conversation = await createConversation();
+  const accepted = await createGeneration(conversation.conversationId, randomUUID(), 'disconnect-once');
+  const firstSubscription = await readSse(accepted.eventsUrl);
+  const content = firstSubscription.at(-1);
+  const resumed = await readSse(accepted.eventsUrl, content.eventId);
+  const snapshot = await requestJson(accepted.statusUrl);
+
+  assert.deepEqual(firstSubscription.map((event) => event.eventType), [
+    'generation.started',
+    'content.delta'
+  ]);
+  assert.deepEqual(resumed.map((event) => event.eventType), [
+    'usage.updated',
+    'generation.completed'
+  ]);
+  assert.equal(new Set([...firstSubscription, ...resumed].map((event) => event.eventId)).size, 4);
+  assert.equal(snapshot.status, 'SUCCEEDED');
+});
+
 test('未知 Last-Event-ID 输出 replay.reset', async () => {
   const conversation = await createConversation();
   const accepted = await createGeneration(conversation.conversationId, randomUUID());
