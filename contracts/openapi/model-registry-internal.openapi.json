@@ -1,0 +1,148 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Autumn Wind Ai Model Registry Internal API",
+    "version": "1.0.0",
+    "description": "Inference Gateway 获取租户模型固定推理目标和加密凭据信封的内部接口。"
+  },
+  "security": [{ "ServiceJwt": [] }],
+  "paths": {
+    "/internal/v1/model-registry/inference-target-resolutions": {
+      "post": {
+        "operationId": "resolveInferenceTarget",
+        "description": "仅返回内部传输的加密信封，绝不返回 API Key 明文。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/InferenceTargetResolutionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "固定推理调用快照。",
+            "headers": {
+              "Cache-Control": { "$ref": "#/components/headers/NoStoreCacheControl" },
+              "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/InferenceTargetView" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ServiceJwt": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Service JWT 必须包含规范 actor_user_id，并提供 model-registry.inference.resolve scope。"
+      }
+    },
+    "schemas": {
+      "InferenceTargetResolutionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ownerUserId", "modelId"],
+        "properties": {
+          "ownerUserId": { "type": "string", "format": "uuid" },
+          "modelId": { "type": "string", "format": "uuid" }
+        }
+      },
+      "InferenceTargetView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["modelId", "providerModelId", "modelVersion", "endpointId", "endpointBaseUrl", "endpointProtocol", "endpointRequestTimeoutSeconds", "endpointVersion", "capabilities", "credentialId", "credential"],
+        "properties": {
+          "modelId": { "type": "string", "format": "uuid" },
+          "providerModelId": { "type": "string" },
+          "modelVersion": { "type": "integer", "format": "int64", "minimum": 0 },
+          "endpointId": { "type": "string", "format": "uuid" },
+          "endpointBaseUrl": { "type": "string", "format": "uri" },
+          "endpointProtocol": { "type": "string", "enum": ["OPENAI_COMPATIBLE"] },
+          "endpointRequestTimeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 120 },
+          "endpointVersion": { "type": "integer", "format": "int64", "minimum": 0 },
+          "capabilities": { "$ref": "#/components/schemas/ModelCapabilities" },
+          "credentialId": { "type": "string", "format": "uuid" },
+          "credential": { "$ref": "#/components/schemas/EncryptedCredentialEnvelope" }
+        }
+      },
+      "ModelCapabilities": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["interfaceType", "inputModalities", "outputModality", "streaming", "systemPrompt", "reasoning", "contextLength", "maxOutputLength"],
+        "properties": {
+          "interfaceType": { "type": "string", "enum": ["CHAT_COMPLETIONS", "IMAGE_GENERATION"] },
+          "inputModalities": { "type": "array", "items": { "type": "string", "enum": ["TEXT", "IMAGE", "FILE", "VIDEO"] } },
+          "outputModality": { "type": "string", "enum": ["TEXT", "IMAGE"] },
+          "streaming": { "type": "boolean" },
+          "systemPrompt": { "type": "boolean" },
+          "reasoning": { "type": "boolean" },
+          "contextLength": { "type": "integer", "minimum": 1 },
+          "maxOutputLength": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "EncryptedCredentialEnvelope": {
+        "type": "object",
+        "description": "仅内部传输的加密信封，不包含 API Key 明文。",
+        "additionalProperties": false,
+        "required": ["version", "keyId", "wrappedDataKeyNonce", "wrappedDataKey", "payloadNonce", "ciphertext"],
+        "properties": {
+          "version": { "type": "integer", "minimum": 1 },
+          "keyId": { "type": "string" },
+          "wrappedDataKeyNonce": { "type": "string", "contentEncoding": "base64" },
+          "wrappedDataKey": { "type": "string", "contentEncoding": "base64" },
+          "payloadNonce": { "type": "string", "contentEncoding": "base64" },
+          "ciphertext": { "type": "string", "contentEncoding": "base64" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["code", "message", "correlationId"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^AW-MODEL_REGISTRY-[A-Z][A-Z0-9_]{1,31}-[0-9]{4}$" },
+          "message": { "type": "string" },
+          "correlationId": { "type": "string", "minLength": 16, "maxLength": 64 },
+          "fieldErrors": { "type": "array", "items": { "type": "object" } }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": { "$ref": "#/components/responses/Error400" },
+      "Unauthorized": { "$ref": "#/components/responses/Error401" },
+      "Forbidden": { "$ref": "#/components/responses/Error403" },
+      "NotFound": { "$ref": "#/components/responses/Error404" },
+      "Conflict": { "$ref": "#/components/responses/Error409" },
+      "NotAcceptable": { "$ref": "#/components/responses/Error406" },
+      "UnsupportedMediaType": { "$ref": "#/components/responses/Error415" },
+      "InternalServerError": { "$ref": "#/components/responses/Error500" },
+      "Error400": { "description": "请求不合法。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error401": { "description": "Service JWT 无效或缺失。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error403": { "description": "无权访问。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error404": { "description": "模型不存在。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error409": { "description": "推理目标不可用。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error406": { "description": "响应媒体类型不受支持。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error415": { "description": "请求媒体类型不受支持。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error500": { "description": "服务器内部错误。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+    },
+    "headers": {
+      "CorrelationId": { "description": "请求关联标识。", "schema": { "type": "string", "minLength": 16, "maxLength": 64 } },
+      "NoStoreCacheControl": { "description": "加密凭据响应不得被缓存。", "schema": { "type": "string", "const": "no-store" } }
+    }
+  }
+}

@@ -31,6 +31,7 @@ public class ModelRegistrySecurityConfiguration {
 
     private static final String ENDPOINT_MANAGE_AUTHORITY = "SCOPE_model-registry.endpoint.manage";
     private static final String MODEL_MANAGE_AUTHORITY = "SCOPE_model-registry.model.manage";
+    private static final String INFERENCE_RESOLVE_AUTHORITY = "SCOPE_model-registry.inference.resolve";
 
     @Bean
     JwtDecoder modelRegistryServiceJwtDecoder(ServiceJwtProperties properties, Clock clock) {
@@ -49,7 +50,7 @@ public class ModelRegistrySecurityConfiguration {
             ModelRegistrySecurityErrorWriter errorWriter
     ) throws Exception {
         http
-                .securityMatcher("/api/v1/model-registry/**")
+                .securityMatcher("/api/v1/model-registry/**", "/internal/v1/model-registry/**")
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .securityContext(context -> context.requireExplicitSave(true)
                         .securityContextRepository(new NullSecurityContextRepository()))
@@ -59,6 +60,9 @@ public class ModelRegistrySecurityConfiguration {
                 .logout(logout -> logout.disable())
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.POST, "/internal/v1/model-registry/inference-target-resolutions")
+                        .access((authentication, context) -> new AuthorizationDecision(
+                                mayResolveInferenceTarget(authentication.get())))
                         .requestMatchers(HttpMethod.GET, "/api/v1/model-registry/endpoints",
                                 "/api/v1/model-registry/endpoints/**")
                         .access((authentication, context) -> new AuthorizationDecision(
@@ -103,6 +107,10 @@ public class ModelRegistrySecurityConfiguration {
 
     private static boolean mayManageModels(Authentication authentication) {
         return mayManage(authentication, MODEL_MANAGE_AUTHORITY);
+    }
+
+    private static boolean mayResolveInferenceTarget(Authentication authentication) {
+        return mayManage(authentication, INFERENCE_RESOLVE_AUTHORITY);
     }
 
     private static boolean mayManage(Authentication authentication, String requiredAuthority) {

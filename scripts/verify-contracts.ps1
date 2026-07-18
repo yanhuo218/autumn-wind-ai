@@ -6,6 +6,7 @@ $eventSchemaFile = Join-Path $projectRoot "contracts/events/event-envelope.v1.sc
 $identityOpenApiFile = Join-Path $projectRoot "contracts/openapi/identity.openapi.json"
 $notificationOpenApiFile = Join-Path $projectRoot "contracts/openapi/notification.openapi.json"
 $modelRegistryOpenApiFile = Join-Path $projectRoot "contracts/openapi/model-registry.openapi.json"
+$modelRegistryInternalOpenApiFile = Join-Path $projectRoot "contracts/openapi/model-registry-internal.openapi.json"
 $identityEventFiles = @(
     "user-disabled.v1.schema.json",
     "account-deletion-requested.v1.schema.json",
@@ -17,6 +18,7 @@ $eventSchema = Get-Content -Raw $eventSchemaFile | ConvertFrom-Json
 $identityOpenApi = Get-Content -Raw $identityOpenApiFile | ConvertFrom-Json
 $notificationOpenApi = Get-Content -Raw $notificationOpenApiFile | ConvertFrom-Json
 $modelRegistryOpenApi = Get-Content -Raw $modelRegistryOpenApiFile | ConvertFrom-Json
+$modelRegistryInternalOpenApi = Get-Content -Raw $modelRegistryInternalOpenApiFile | ConvertFrom-Json
 
 if ($openApi.openapi -notmatch "^3\.1\.") {
     throw "公共 OpenAPI 必须使用 3.1.x。"
@@ -238,6 +240,40 @@ foreach ($response in $modelRegistryErrorResponses) {
 $modelRegistryErrorPattern = $modelRegistryOpenApi.components.schemas.ErrorResponse.properties.code.pattern
 if ($modelRegistryErrorPattern -ne "^AW-MODEL_REGISTRY-[A-Z][A-Z0-9_]{1,31}-[0-9]{4}$") {
     throw "Model Registry 错误码格式不符合公共约定。"
+}
+
+if ($modelRegistryInternalOpenApi.openapi -notmatch "^3\.1\.") {
+    throw "Model Registry 内部 OpenAPI 必须使用 3.1.x。"
+}
+$inferenceTargetResolutionPath = "/internal/v1/model-registry/inference-target-resolutions"
+$inferenceTargetResolution = $modelRegistryInternalOpenApi.paths.$inferenceTargetResolutionPath.post
+if ($null -eq $inferenceTargetResolution) {
+    throw "Model Registry 内部 OpenAPI 缺少推理目标解析路径。"
+}
+$internalRequest = $modelRegistryInternalOpenApi.components.schemas.InferenceTargetResolutionRequest
+$internalView = $modelRegistryInternalOpenApi.components.schemas.InferenceTargetView
+$encryptedEnvelope = $modelRegistryInternalOpenApi.components.schemas.EncryptedCredentialEnvelope
+if ($internalRequest.additionalProperties -ne $false -or $internalView.additionalProperties -ne $false -or $encryptedEnvelope.additionalProperties -ne $false) {
+    throw "Model Registry 内部推理接口请求和响应不得允许未声明字段。"
+}
+if ($null -ne $internalView.properties.apiKey -or $null -ne $encryptedEnvelope.properties.apiKey) {
+    throw "Model Registry 内部推理接口不得声明 API Key 明文字段。"
+}
+$internalSuccessHeaders = $inferenceTargetResolution.responses."200".headers
+if ($null -eq $internalSuccessHeaders."Cache-Control" -or $null -eq $internalSuccessHeaders."X-Correlation-ID") {
+    throw "Model Registry 内部推理接口必须声明 no-store 和 X-Correlation-ID。"
+}
+$cacheControlHeaderReference = $internalSuccessHeaders."Cache-Control".'$ref'
+if ($cacheControlHeaderReference -ne "#/components/headers/NoStoreCacheControl") {
+    throw "Model Registry 内部推理接口 Cache-Control 必须引用 no-store Header 定义。"
+}
+$cacheControlHeader = $modelRegistryInternalOpenApi.components.headers.NoStoreCacheControl
+if ($cacheControlHeader.schema.const -ne "no-store") {
+    throw "Model Registry 内部推理接口 Cache-Control 必须固定为 no-store。"
+}
+$internalSecurityDescription = $modelRegistryInternalOpenApi.components.securitySchemes.ServiceJwt.description
+if ($internalSecurityDescription -notmatch "model-registry\.inference\.resolve" -or $internalSecurityDescription -notmatch "actor_user_id") {
+    throw "Model Registry 内部推理接口必须声明专用 scope 和操作者声明。"
 }
 
 $policyRequest = $identityOpenApi.components.schemas.AuthPolicyUpdateRequest
