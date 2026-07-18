@@ -1,13 +1,19 @@
-import { AppShell } from './components/app-shell';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+
+import { ChatRoute } from './routes/chat-route';
+import { queryClient } from './lib/query-client';
 
 export function App() {
   return (
-    <AppShell
-      sidebar={<span className="aw-sr-only">Autumn Wind Ai 侧栏</span>}
-      header={<span className="aw-sr-only">当前会话</span>}
-      messages={<span />}
-      composer={<span className="aw-sr-only">消息输入区</span>}
-      messagesTestId="user-web-root"
-    />
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Navigate to="/chat" replace />} />
+          <Route path="/chat" element={<ChatRoute />} />
+          <Route path="/chat/:conversationId" element={<ChatRoute />} />
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }

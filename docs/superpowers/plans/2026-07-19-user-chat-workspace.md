@@ -547,11 +547,11 @@ export interface ModelCatalog {
 
 筛选条件必须同时满足 `enabled`、`interfaceType === 'CHAT_COMPLETIONS'`、`inputModalities` 包含 `TEXT`、`outputModality === 'TEXT'`。默认模型优先 `defaultModel`，否则选择排序后的首项；不得按名字猜能力。
 
-- [ ] **Step 1：先写模型筛选与适配器红灯测试**
+- [x] **Step 1：先写模型筛选与适配器红灯测试**
 
 覆盖禁用模型、图片生成模型、无文本输入模型被排除；HTTP 适配器固定请求 `/api/v1/model-registry/models` 且携带 Cookie；Mock 只返回固定 UUID 和能力，不含端点字段。
 
-- [ ] **Step 2：实现模型目录工厂**
+- [x] **Step 2：实现模型目录工厂**
 
 ```typescript
 export function createModelCatalog(mode: 'mock' | 'http'): ModelCatalog;
@@ -559,11 +559,11 @@ export function createModelCatalog(mode: 'mock' | 'http'): ModelCatalog;
 
 开发默认 `mock`，只有 `VITE_MODEL_CATALOG_MODE=http` 使用真实服务；生产构建默认 `http`。
 
-- [ ] **Step 3：实现模型选择器**
+- [x] **Step 3：实现模型选择器**
 
 使用 Radix Select，菜单项显示展示名和文本/视觉/文件能力图标。宽屏入口位于顶栏；中小屏只渲染中央第二行入口。长名称省略，`Esc` 关闭并恢复焦点。
 
-- [ ] **Step 4：实现会话侧栏查询与归档**
+- [x] **Step 4：实现会话侧栏查询与归档**
 
 TanStack Query Key 固定：
 
@@ -576,11 +576,11 @@ const conversationKeys = {
 
 列表按“今天 / 过去 7 天 / 更早”分组；归档成功后失效 `all`，当前会话被归档时导航到 `/chat`。不进行跨页乐观伪造。
 
-- [ ] **Step 5：实现路由**
+- [x] **Step 5：实现路由**
 
 路由固定 `/chat` 与 `/chat/:conversationId`；根路径重定向 `/chat`。路由层只编排 Client、Query 和选择状态。
 
-- [ ] **Step 6：运行 Task 5 验证并提交**
+- [x] **Step 6：运行 Task 5 验证并提交**
 
 ```powershell
 pnpm --filter @autumn-wind/user-web test

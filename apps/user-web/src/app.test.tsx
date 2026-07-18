@@ -10,3 +10,9 @@ it('渲染可访问的用户端根区域', () => {
   expect(root.dataset.testid).toBe('user-web-root');
   expect(screen.getByTestId('user-web-root')).toBe(root);
 });
+
+it('根路径进入聊天路由编排', () => {
+  render(<App />);
+
+  expect(screen.getByTestId('chat-route')).toBeTruthy();
+});

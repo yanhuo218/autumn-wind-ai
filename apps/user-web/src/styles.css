@@ -75,6 +75,219 @@ input:focus-visible {
   opacity: 0.5;
 }
 
+.aw-model-selector {
+  display: inline-flex;
+  width: min(280px, 48vw);
+  min-width: 0;
+  height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--aw-line);
+  border-radius: 4px;
+  background: var(--aw-surface);
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.aw-model-selector__label,
+.aw-model-selector__item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aw-model-selector__capabilities,
+.aw-model-selector__item-content {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.aw-model-selector__capabilities {
+  color: var(--aw-muted);
+}
+
+.aw-model-selector__content {
+  z-index: 20;
+  min-width: 220px;
+  overflow: hidden;
+  border: 1px solid var(--aw-line);
+  border-radius: 6px;
+  background: var(--aw-surface);
+  box-shadow: 0 12px 32px rgba(24, 33, 30, 0.12);
+  padding: 4px;
+}
+
+.aw-model-selector__item {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  border-radius: 4px;
+  padding: 0 8px;
+  outline: none;
+  cursor: pointer;
+}
+
+.aw-model-selector__item[data-highlighted] {
+  background: var(--aw-canvas);
+}
+
+.aw-model-selector__item-content {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.aw-conversation-sidebar {
+  display: flex;
+  min-width: 0;
+  min-height: 100%;
+  flex-direction: column;
+  padding: 16px 12px;
+}
+
+.aw-conversation-sidebar__topbar {
+  display: flex;
+  min-width: 0;
+  height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 12px;
+}
+
+.aw-conversation-sidebar__brand {
+  min-width: 0;
+  overflow: hidden;
+  font-family: Bahnschrift, "Segoe UI Variable", sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aw-conversation-sidebar__groups {
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.aw-conversation-sidebar__group {
+  margin-top: 16px;
+}
+
+.aw-conversation-sidebar__group:first-child {
+  margin-top: 0;
+}
+
+.aw-conversation-sidebar__group-label {
+  margin: 0 8px 6px;
+  color: var(--aw-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.aw-conversation-sidebar__list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.aw-conversation-sidebar__item {
+  display: flex;
+  min-width: 0;
+  height: 40px;
+  align-items: center;
+  gap: 2px;
+}
+
+.aw-conversation-sidebar__conversation {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: 40px;
+  flex: 1 1 auto;
+  align-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 10px 0 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.aw-conversation-sidebar__conversation:hover,
+.aw-conversation-sidebar__conversation:focus-visible,
+.aw-conversation-sidebar__conversation.is-active {
+  background: rgba(217, 224, 221, 0.56);
+}
+
+.aw-conversation-sidebar__conversation.is-active::before {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--aw-pine);
+  content: "";
+}
+
+.aw-conversation-sidebar__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aw-conversation-sidebar__archive {
+  opacity: 0;
+}
+
+.aw-conversation-sidebar__item:hover .aw-conversation-sidebar__archive,
+.aw-conversation-sidebar__item:focus-within .aw-conversation-sidebar__archive {
+  opacity: 1;
+}
+
+.aw-chat-route {
+  display: contents;
+}
+
+.aw-chat-route__desktop-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 20px;
+}
+
+.aw-chat-route__title {
+  display: block;
+  min-width: 0;
+  max-width: 280px;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aw-chat-route__empty {
+  display: grid;
+  min-height: min(38vh, 360px);
+  place-items: center;
+  color: var(--aw-muted);
+  text-align: center;
+}
+
+.aw-chat-route__empty strong {
+  color: var(--aw-ink);
+  font-size: 16px;
+  font-weight: 600;
+}
+
 .aw-app-shell {
   display: grid;
   grid-template-columns: 256px minmax(0, 1fr);
