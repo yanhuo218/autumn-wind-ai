@@ -53,9 +53,10 @@ Autumn Wind Ai 是一个面向多用户场景的 BYOK（Bring Your Own Key）AI 
 - [SecretStore 凭据保护](docs/development/secret-store.md)
 - [Identity Service 开发说明](docs/development/identity-service.md)
 - [Model Registry 领域规则设计](docs/superpowers/specs/2026-07-18-model-registry-domain-design.md)
+- [Model Registry Service 开发说明](docs/development/model-registry-service.md)
 
 设计规格包含产品范围、页面参照、技术边界、服务职责、核心流程、数据归属、安全要求、测试策略和 V1 验收标准。
 
 ## 开发状态
 
-阶段 1 至阶段 3 已完成。阶段 4 已建立 Model Registry 独立服务骨架和首批端点、模型能力领域规则，下一批接入 PostgreSQL、SecretStore 和用户管理接口。
+阶段 1 至阶段 3 已完成。阶段 4 已建立 Model Registry 独立服务、领域规则、端点持久化和 SecretStore 凭据引用，下一批实现模型与能力持久化。

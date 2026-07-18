@@ -35,3 +35,9 @@ management:
     web:
       exposure:
         include: health,info
+
+autumn-wind:
+  model-registry:
+    secret-store:
+      master-key-file: ${MODEL_REGISTRY_SECRET_STORE_MASTER_KEY_FILE}
+      key-id: ${MODEL_REGISTRY_SECRET_STORE_KEY_ID:local-v1}
