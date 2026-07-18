@@ -1,6 +1,7 @@
 package io.github.yanhuo218.autumnwind.identity.interfaces.http;
 
 import io.github.yanhuo218.autumnwind.identity.application.administration.UserAdminView;
+import io.github.yanhuo218.autumnwind.identity.application.administration.AdminUserCreationService;
 import io.github.yanhuo218.autumnwind.identity.application.administration.UserAdministrationService;
 import io.github.yanhuo218.autumnwind.identity.application.administration.UserPage;
 import io.github.yanhuo218.autumnwind.identity.application.registration.RegistrationOptionsService;
@@ -66,6 +67,9 @@ class IdentityUserAdministrationControllerTest {
     private UserAdministrationService userService;
 
     @MockitoBean
+    private AdminUserCreationService creationService;
+
+    @MockitoBean
     private RegistrationOptionsService registrationOptionsService;
 
     @MockitoBean
@@ -100,6 +104,38 @@ class IdentityUserAdministrationControllerTest {
                 .andExpect(jsonPath("$.totalElements").value(21));
 
         verify(userService).listUsers(any());
+    }
+
+    @Test
+    void 管理员创建用户返回201并读取用户详情() throws Exception {
+        when(sessionService.currentSession(RAW_SESSION_TOKEN)).thenReturn(session(UserRole.ADMIN));
+        when(creationService.create(any())).thenReturn(userView(AccountStatus.ACTIVE));
+        when(userService.getUser(USER_ID)).thenReturn(userView(AccountStatus.ACTIVE));
+        CsrfContext csrf = csrfContext();
+
+        mockMvc.perform(post("/api/v1/admin/users")
+                        .cookie(sessionCookie(), csrf.cookie())
+                        .header(IdentityAuthController.CSRF_HEADER_NAME, csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "user@example.com",
+                                  "password": "Secure-Pass-123",
+                                  "displayName": "User",
+                                  "role": "USER",
+                                  "emailVerified": true
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(USER_ID.toString()));
+
+        mockMvc.perform(get("/api/v1/admin/users/{userId}", USER_ID)
+                        .cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("user@example.com"));
+
+        verify(creationService).create(any());
+        verify(userService).getUser(USER_ID);
     }
 
     @Test

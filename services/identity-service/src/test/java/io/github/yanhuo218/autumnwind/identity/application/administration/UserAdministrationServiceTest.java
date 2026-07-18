@@ -117,4 +117,12 @@ class UserAdministrationServiceTest {
         assertEquals(IdentityErrorCode.ACCOUNT_STATE_CONFLICT, exception.errorCode());
         verify(userRepository, never()).saveAndFlush(any());
     }
+
+    @Test
+    void 读取用户详情返回用户视图() {
+        UserAdminView view = service.getUser(USER_ID);
+
+        assertEquals(USER_ID, view.id());
+        assertEquals("user@example.com", view.email());
+    }
 }

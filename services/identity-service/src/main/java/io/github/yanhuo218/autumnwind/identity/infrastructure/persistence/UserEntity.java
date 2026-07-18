@@ -104,6 +104,22 @@ public class UserEntity {
         return new UserEntity(id, email, passwordHash, displayName, status, UserRole.USER, now);
     }
 
+    public static UserEntity createByAdmin(
+            UUID id,
+            String email,
+            String passwordHash,
+            String displayName,
+            UserRole role,
+            boolean emailVerified,
+            Instant now
+    ) {
+        UserEntity user = new UserEntity(id, email, passwordHash, displayName, AccountStatus.ACTIVE, role, now);
+        if (emailVerified) {
+            user.emailVerifiedAt = now;
+        }
+        return user;
+    }
+
     public boolean passwordMatches(PasswordHasher hasher, CharSequence password) {
         return hasher.matches(password, passwordHash);
     }

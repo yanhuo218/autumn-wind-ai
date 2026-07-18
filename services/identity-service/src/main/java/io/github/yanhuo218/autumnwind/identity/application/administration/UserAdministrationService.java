@@ -53,6 +53,11 @@ public class UserAdministrationService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public UserAdminView getUser(UUID userId) {
+        return toView(user(userId));
+    }
+
     @Transactional
     public UserAdminView disableUser(UUID userId, UUID actorUserId) {
         Objects.requireNonNull(actorUserId, "操作者不能为空。");

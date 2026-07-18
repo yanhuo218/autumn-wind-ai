@@ -1,6 +1,7 @@
 package io.github.yanhuo218.autumnwind.identity.interfaces.http;
 
 import io.github.yanhuo218.autumnwind.identity.application.administration.UserAdminView;
+import io.github.yanhuo218.autumnwind.identity.application.administration.AdminUserCreationService;
 import io.github.yanhuo218.autumnwind.identity.application.administration.UserAdministrationService;
 import io.github.yanhuo218.autumnwind.identity.application.administration.UserListQuery;
 import io.github.yanhuo218.autumnwind.identity.application.administration.UserPage;
@@ -9,6 +10,7 @@ import io.github.yanhuo218.autumnwind.identity.application.error.IdentityErrorCo
 import io.github.yanhuo218.autumnwind.identity.domain.account.AccountStatus;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,9 +28,14 @@ import java.util.UUID;
 public class IdentityUserAdministrationController {
 
     private final UserAdministrationService userService;
+    private final AdminUserCreationService creationService;
 
-    public IdentityUserAdministrationController(UserAdministrationService userService) {
+    public IdentityUserAdministrationController(
+            UserAdministrationService userService,
+            AdminUserCreationService creationService
+    ) {
         this.userService = userService;
+        this.creationService = creationService;
     }
 
     @GetMapping
@@ -43,6 +50,21 @@ public class IdentityUserAdministrationController {
         } catch (IllegalArgumentException exception) {
             throw new IdentityApplicationException(IdentityErrorCode.INVALID_REQUEST, "用户分页参数不合法。");
         }
+    }
+
+    @PostMapping
+    public ResponseEntity<UserAdminView> createUser(
+            @AuthenticationPrincipal SessionPrincipal principal,
+            @Valid @RequestBody AdminCreateUserRequest request
+    ) {
+        actor(principal);
+        UserAdminView view = creationService.create(request.toCommand());
+        return ResponseEntity.status(HttpStatus.CREATED).body(view);
+    }
+
+    @GetMapping("/{userId}")
+    public UserAdminView getUser(@PathVariable("userId") UUID userId) {
+        return userService.getUser(userId);
     }
 
     @PostMapping("/{userId}/disable")
