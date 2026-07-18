@@ -2,7 +2,7 @@
 
 Autumn Wind Ai 是一个面向多用户场景的 BYOK（Bring Your Own Key）AI 对话平台。平台本身不提供固定模型端点，每位用户可以安全配置自己的 OpenAI-compatible API 地址、密钥和模型能力。
 
-> 当前项目处于阶段 4，已完成身份、通知和管理基础能力，正在交付用户端点、模型注册与文本推理闭环。
+> 当前项目处于阶段 4，已完成身份、通知、管理、模型注册和 OpenAI-compatible 文本推理基础能力，正在交付文本对话闭环。
 
 ## 产品目标
 
@@ -54,9 +54,10 @@ Autumn Wind Ai 是一个面向多用户场景的 BYOK（Bring Your Own Key）AI 
 - [Identity Service 开发说明](docs/development/identity-service.md)
 - [Model Registry 领域规则设计](docs/superpowers/specs/2026-07-18-model-registry-domain-design.md)
 - [Model Registry Service 开发说明](docs/development/model-registry-service.md)
+- [Inference Gateway 开发说明](docs/development/inference-gateway.md)
 
 设计规格包含产品范围、页面参照、技术边界、服务职责、核心流程、数据归属、安全要求、测试策略和 V1 验收标准。
 
 ## 开发状态
 
-阶段 1 至阶段 3 已完成。阶段 4 已建立 Model Registry 独立服务、领域规则、端点与模型能力持久化、SecretStore 凭据引用和用户管理 HTTP，下一批补齐 Model Registry OpenAPI 与连接测试任务边界。
+阶段 1 至阶段 3 已完成。阶段 4 已建立 Model Registry 的端点、模型、凭据引用、公共与内部契约，以及 Inference Gateway 的固定推理目标、SSRF/DNS 防护、临时凭据解析、OpenAI-compatible 文本事件适配和 Fake Provider 集成回归。连接测试 Gateway Worker 因任务尚未固定模型来源而未实现。

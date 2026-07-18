@@ -152,6 +152,29 @@ class RedirectPolicyTest {
         assertFalse(events.toString().contains("private-location-placeholder"));
     }
 
+    @Test
+    void 重定向后混合公网私网DNS在第二次请求前拒绝() throws Exception {
+        AtomicInteger validationCount = new AtomicInteger();
+        OutboundTargetPolicy policy = new OutboundTargetPolicy(host -> {
+            if (validationCount.incrementAndGet() == 1) {
+                return List.of(ipv4(11, 0, 0, 1));
+            }
+            return List.of(ipv4(11, 0, 0, 2), ipv4(10, 0, 0, 1));
+        }, new PublicAddressPolicy());
+        ValidatedTarget initial = policy.validate(URI.create("https://provider.invalid/v1/start"));
+        ScriptedAttempt attempt = new ScriptedAttempt(new ArrayList<>(), response(307, "/v1/next"));
+        ReactorNettyProviderExchangeClient client = new ReactorNettyProviderExchangeClient(policy, attempt);
+
+        TargetPolicyException error = org.junit.jupiter.api.Assertions.assertThrows(
+                TargetPolicyException.class,
+                () -> client.exchange(initial, request()).blockLast());
+
+        assertEquals("目标地址不是公网地址。", error.getMessage());
+        assertNull(error.getCause());
+        assertEquals(2, validationCount.get());
+        assertEquals(1, attempt.attemptCount());
+    }
+
     @ParameterizedTest
     @ValueSource(ints = {300, 301, 302, 303, 304, 305, 306, 309})
     void 拒绝307和308之外的所有重定向状态(int status) throws Exception {

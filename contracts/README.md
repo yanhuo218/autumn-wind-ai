@@ -11,6 +11,8 @@
 
 - `openapi/identity.openapi.json`：Identity Service 公共、管理和内部接口。
 - `openapi/model-registry.openapi.json`：Model Registry 端点、只写凭据、连接测试任务和模型能力接口。
+- `openapi/model-registry-internal.openapi.json`：Model Registry 推理目标解析和连接测试任务租约内部接口。
+- `events/inference-event.v1.schema.json`：Inference Gateway 标准推理事件。
 - `events/user-disabled.v1.schema.json`：用户禁用事实。
 - `events/account-deletion-requested.v1.schema.json`：账户删除请求事实。
 - `events/email-requested.v1.schema.json`：不携带验证或重置凭据的邮件投递请求。

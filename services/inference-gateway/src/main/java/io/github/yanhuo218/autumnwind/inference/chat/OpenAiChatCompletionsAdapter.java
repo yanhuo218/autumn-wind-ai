@@ -14,6 +14,7 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -95,6 +96,7 @@ public final class OpenAiChatCompletionsAdapter {
                 return Flux.error(new ConnectionAttemptFailure());
             }
             return exchange
+                    .timeout(Duration.ofSeconds(target.endpointRequestTimeoutSeconds()))
                     .onErrorMap(OpenAiChatCompletionsAdapter::mapExchangeError)
                     .switchOnFirst((signal, frames) -> {
                         if (signal.hasError()) {
