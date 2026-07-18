@@ -15,6 +15,7 @@
         <module>services/model-registry-service</module>
         <module>services/notification-service</module>
         <module>services/inference-gateway</module>
+        <module>services/gateway-service</module>
         <module>services/conversation-service</module>
     </modules>
 
