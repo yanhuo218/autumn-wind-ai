@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -133,6 +134,18 @@ class EndpointAdministrationServiceTest {
         );
 
         assertEquals(ModelRegistryErrorCode.ENDPOINT_NOT_FOUND, exception.code());
+    }
+
+    @Test
+    void 列出端点时按所有者映射公开视图() {
+        when(endpointRepository.findAllByOwnerUserIdOrderByCreatedAtAsc(OWNER_ID))
+                .thenReturn(List.of(endpoint(credential())));
+
+        List<EndpointView> views = service.list(OWNER_ID);
+
+        assertEquals(1, views.size());
+        assertEquals(OWNER_ID, views.getFirst().ownerUserId());
+        assertTrue(views.getFirst().credentialConfigured());
     }
 
     @Test

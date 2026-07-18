@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -64,6 +65,14 @@ public class EndpointAdministrationService {
     @Transactional(readOnly = true)
     public EndpointView get(UUID ownerUserId, UUID endpointId) {
         return EndpointView.from(ownedEndpoint(ownerUserId, endpointId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<EndpointView> list(UUID ownerUserId) {
+        Objects.requireNonNull(ownerUserId, "端点所有者不能为空。");
+        return endpointRepository.findAllByOwnerUserIdOrderByCreatedAtAsc(ownerUserId).stream()
+                .map(EndpointView::from)
+                .toList();
     }
 
     @Transactional
