@@ -1,0 +1,447 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Autumn Wind Ai Model Registry API",
+    "version": "1.0.0",
+    "description": "用户端点、只写凭据、连接测试任务和模型能力管理接口。"
+  },
+  "security": [
+    {
+      "ServiceJwt": []
+    }
+  ],
+  "paths": {
+    "/api/v1/model-registry/endpoints": {
+      "get": {
+        "operationId": "listEndpoints",
+        "responses": {
+          "200": {
+            "description": "当前用户的端点列表。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/EndpointView" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "post": {
+        "operationId": "createEndpoint",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EndpointCreateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "端点创建成功。",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EndpointView" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/api/v1/model-registry/endpoints/{endpointId}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/EndpointId" }
+      ],
+      "get": {
+        "operationId": "getEndpoint",
+        "responses": {
+          "200": {
+            "description": "端点详情。",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EndpointView" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/api/v1/model-registry/endpoints/{endpointId}/credential": {
+      "parameters": [
+        { "$ref": "#/components/parameters/EndpointId" }
+      ],
+      "put": {
+        "operationId": "replaceEndpointCredential",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EndpointCredentialReplaceRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "凭据替换成功。",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EndpointView" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/api/v1/model-registry/endpoints/{endpointId}/connection-tests": {
+      "parameters": [
+        { "$ref": "#/components/parameters/EndpointId" }
+      ],
+      "post": {
+        "operationId": "createEndpointConnectionTest",
+        "description": "只创建持久化任务；外部网络请求由 Inference Gateway 执行。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EndpointConnectionTestRequest" }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "连接测试任务已入队。",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EndpointConnectionTestView" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/api/v1/model-registry/models": {
+      "get": {
+        "operationId": "listModels",
+        "responses": {
+          "200": {
+            "description": "当前用户的模型列表。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ModelView" }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "post": {
+        "operationId": "createModel",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ModelCreateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "模型创建成功。",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ModelView" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/api/v1/model-registry/models/{modelId}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/ModelId" }
+      ],
+      "get": {
+        "operationId": "getModel",
+        "responses": {
+          "200": {
+            "description": "模型详情。",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ModelView" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      },
+      "put": {
+        "operationId": "updateModel",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ModelUpdateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "模型更新成功。",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ModelView" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ServiceJwt": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Service JWT 必须包含规范 actor_user_id，并按接口提供 model-registry.endpoint.manage 或 model-registry.model.manage scope。"
+      }
+    },
+    "parameters": {
+      "EndpointId": {
+        "name": "endpointId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      },
+      "ModelId": {
+        "name": "modelId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      }
+    },
+    "schemas": {
+      "EndpointCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["displayName", "baseUrl", "protocol", "requestTimeoutSeconds", "enabled", "apiKey"],
+        "properties": {
+          "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "baseUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+          "protocol": { "type": "string", "enum": ["OPENAI_COMPATIBLE"] },
+          "requestTimeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 120 },
+          "enabled": { "type": "boolean" },
+          "apiKey": { "type": "string", "minLength": 1, "maxLength": 4096, "writeOnly": true }
+        }
+      },
+      "EndpointCredentialReplaceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["apiKey", "expectedVersion"],
+        "properties": {
+          "apiKey": { "type": "string", "minLength": 1, "maxLength": 4096, "writeOnly": true },
+          "expectedVersion": { "type": "integer", "format": "int64", "minimum": 0 }
+        }
+      },
+      "EndpointView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "ownerUserId", "displayName", "baseUrl", "protocol", "requestTimeoutSeconds", "enabled", "credentialConfigured", "version", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "ownerUserId": { "type": "string", "format": "uuid" },
+          "displayName": { "type": "string" },
+          "baseUrl": { "type": "string", "format": "uri" },
+          "protocol": { "type": "string", "enum": ["OPENAI_COMPATIBLE"] },
+          "requestTimeoutSeconds": { "type": "integer" },
+          "enabled": { "type": "boolean" },
+          "credentialConfigured": { "type": "boolean" },
+          "version": { "type": "integer", "format": "int64" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "EndpointConnectionTestRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["expectedVersion"],
+        "properties": {
+          "expectedVersion": { "type": "integer", "format": "int64", "minimum": 0 }
+        }
+      },
+      "EndpointConnectionTestView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["jobId", "endpointId", "status", "endpointVersion", "createdAt"],
+        "properties": {
+          "jobId": { "type": "string", "format": "uuid" },
+          "endpointId": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED"] },
+          "endpointVersion": { "type": "integer", "format": "int64" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ModelCapabilities": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["interfaceType", "inputModalities", "outputModality", "streaming", "systemPrompt", "reasoning", "contextLength", "maxOutputLength"],
+        "properties": {
+          "interfaceType": { "type": "string", "enum": ["CHAT_COMPLETIONS", "IMAGE_GENERATION"] },
+          "inputModalities": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "enum": ["TEXT", "IMAGE", "FILE", "VIDEO"] }
+          },
+          "outputModality": { "type": "string", "enum": ["TEXT", "IMAGE"] },
+          "streaming": { "type": "boolean" },
+          "systemPrompt": { "type": "boolean" },
+          "reasoning": { "type": "boolean" },
+          "contextLength": { "type": "integer", "minimum": 1 },
+          "maxOutputLength": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "ModelCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["endpointId", "providerModelId", "displayName", "capabilities", "enabled", "defaultModel"],
+        "properties": {
+          "endpointId": { "type": "string", "format": "uuid" },
+          "providerModelId": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "capabilities": { "$ref": "#/components/schemas/ModelCapabilities" },
+          "enabled": { "type": "boolean" },
+          "defaultModel": { "type": "boolean" }
+        }
+      },
+      "ModelUpdateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["providerModelId", "displayName", "capabilities", "enabled", "defaultModel", "expectedVersion"],
+        "properties": {
+          "providerModelId": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "capabilities": { "$ref": "#/components/schemas/ModelCapabilities" },
+          "enabled": { "type": "boolean" },
+          "defaultModel": { "type": "boolean" },
+          "expectedVersion": { "type": "integer", "format": "int64", "minimum": 0 }
+        }
+      },
+      "ModelView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "ownerUserId", "endpointId", "providerModelId", "displayName", "capabilities", "enabled", "defaultModel", "capabilitySchemaVersion", "version", "createdAt", "updatedAt"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "ownerUserId": { "type": "string", "format": "uuid" },
+          "endpointId": { "type": "string", "format": "uuid" },
+          "providerModelId": { "type": "string" },
+          "displayName": { "type": "string" },
+          "capabilities": { "$ref": "#/components/schemas/ModelCapabilities" },
+          "enabled": { "type": "boolean" },
+          "defaultModel": { "type": "boolean" },
+          "capabilitySchemaVersion": { "type": "integer" },
+          "version": { "type": "integer", "format": "int64" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["code", "message", "correlationId"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^AW-MODEL_REGISTRY-[A-Z][A-Z0-9_]{1,31}-[0-9]{4}$" },
+          "message": { "type": "string" },
+          "correlationId": { "type": "string", "minLength": 16, "maxLength": 64 },
+          "fieldErrors": { "type": "array", "items": { "type": "object" } }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": { "$ref": "#/components/responses/Error400" },
+      "Unauthorized": { "$ref": "#/components/responses/Error401" },
+      "Forbidden": { "$ref": "#/components/responses/Error403" },
+      "NotFound": { "$ref": "#/components/responses/Error404" },
+      "Conflict": { "$ref": "#/components/responses/Error409" },
+      "NotAcceptable": { "$ref": "#/components/responses/Error406" },
+      "UnsupportedMediaType": { "$ref": "#/components/responses/Error415" },
+      "InternalServerError": { "$ref": "#/components/responses/Error500" },
+      "Error400": { "description": "请求不合法。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error401": { "description": "Service JWT 无效或缺失。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error403": { "description": "无权访问。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error404": { "description": "资源不存在。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error406": { "description": "响应媒体类型不受支持。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error409": { "description": "资源状态或版本冲突。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error415": { "description": "请求媒体类型不受支持。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error500": { "description": "服务器内部错误。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+    },
+    "headers": {
+      "CorrelationId": {
+        "description": "请求关联标识。",
+        "schema": { "type": "string", "minLength": 16, "maxLength": 64 }
+      }
+    }
+  }
+}

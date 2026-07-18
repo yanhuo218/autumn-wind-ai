@@ -66,6 +66,10 @@ public class ModelRegistrySecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/v1/model-registry/endpoints")
                         .access((authentication, context) -> new AuthorizationDecision(
                                 mayManageEndpoints(authentication.get())))
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/v1/model-registry/endpoints/*/connection-tests")
+                        .access((authentication, context) -> new AuthorizationDecision(
+                                mayManageEndpoints(authentication.get())))
                         .requestMatchers(HttpMethod.PUT, "/api/v1/model-registry/endpoints/*/credential")
                         .access((authentication, context) -> new AuthorizationDecision(
                                 mayManageEndpoints(authentication.get())))

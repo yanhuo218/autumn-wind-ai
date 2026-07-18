@@ -117,7 +117,7 @@ class EndpointAdministrationControllerTest {
                                 {"displayName":"","baseUrl":"http://not-https","apiKey":""}
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("AW-MODEL-REGISTRY-VALIDATION-0001"));
+                .andExpect(jsonPath("$.code").value("AW-MODEL_REGISTRY-VALIDATION-0001"));
 
         verify(administrationService, never()).create(any());
     }
@@ -139,7 +139,7 @@ class EndpointAdministrationControllerTest {
         mockMvc.perform(get(ENDPOINTS_PATH + "/not-a-uuid")
                         .principal(servicePrincipal()))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("AW-MODEL-REGISTRY-VALIDATION-0001"));
+                .andExpect(jsonPath("$.code").value("AW-MODEL_REGISTRY-VALIDATION-0001"));
     }
 
     private static JwtAuthenticationToken servicePrincipal() {

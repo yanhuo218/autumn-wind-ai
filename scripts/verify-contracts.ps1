@@ -5,6 +5,7 @@ $openApiFile = Join-Path $projectRoot "contracts/openapi/common.openapi.json"
 $eventSchemaFile = Join-Path $projectRoot "contracts/events/event-envelope.v1.schema.json"
 $identityOpenApiFile = Join-Path $projectRoot "contracts/openapi/identity.openapi.json"
 $notificationOpenApiFile = Join-Path $projectRoot "contracts/openapi/notification.openapi.json"
+$modelRegistryOpenApiFile = Join-Path $projectRoot "contracts/openapi/model-registry.openapi.json"
 $identityEventFiles = @(
     "user-disabled.v1.schema.json",
     "account-deletion-requested.v1.schema.json",
@@ -15,6 +16,7 @@ $openApi = Get-Content -Raw $openApiFile | ConvertFrom-Json
 $eventSchema = Get-Content -Raw $eventSchemaFile | ConvertFrom-Json
 $identityOpenApi = Get-Content -Raw $identityOpenApiFile | ConvertFrom-Json
 $notificationOpenApi = Get-Content -Raw $notificationOpenApiFile | ConvertFrom-Json
+$modelRegistryOpenApi = Get-Content -Raw $modelRegistryOpenApiFile | ConvertFrom-Json
 
 if ($openApi.openapi -notmatch "^3\.1\.") {
     throw "公共 OpenAPI 必须使用 3.1.x。"
@@ -159,6 +161,85 @@ if ($testEmailJobView.additionalProperties -ne $false) {
     throw "Notification 测试邮件任务响应不能允许未声明字段。"
 }
 
+if ($modelRegistryOpenApi.openapi -notmatch "^3\.1\.") {
+    throw "Model Registry OpenAPI 必须使用 3.1.x。"
+}
+$requiredModelRegistryPaths = @(
+    "/api/v1/model-registry/endpoints",
+    "/api/v1/model-registry/endpoints/{endpointId}",
+    "/api/v1/model-registry/endpoints/{endpointId}/credential",
+    "/api/v1/model-registry/endpoints/{endpointId}/connection-tests",
+    "/api/v1/model-registry/models",
+    "/api/v1/model-registry/models/{modelId}"
+)
+foreach ($path in $requiredModelRegistryPaths) {
+    if ($null -eq $modelRegistryOpenApi.paths.$path) {
+        throw "Model Registry OpenAPI 缺少必要路径：$path"
+    }
+}
+$endpointCreate = $modelRegistryOpenApi.components.schemas.EndpointCreateRequest
+$endpointCredentialReplace = $modelRegistryOpenApi.components.schemas.EndpointCredentialReplaceRequest
+$endpointView = $modelRegistryOpenApi.components.schemas.EndpointView
+$endpointCreateKeyIsNotWriteOnly = $endpointCreate.properties.apiKey.writeOnly -ne $true
+$endpointReplaceKeyIsNotWriteOnly = $endpointCredentialReplace.properties.apiKey.writeOnly -ne $true
+$endpointViewContainsApiKey = $null -ne $endpointView.properties.apiKey
+$endpointViewAllowsUnknownFields = $endpointView.additionalProperties -ne $false
+$endpointSecretBoundaryInvalid = $endpointCreateKeyIsNotWriteOnly -or $endpointReplaceKeyIsNotWriteOnly -or $endpointViewContainsApiKey -or $endpointViewAllowsUnknownFields
+if ($endpointSecretBoundaryInvalid) {
+    throw "Model Registry API Key 必须只写且不能出现在端点读取视图。"
+}
+$modelRegistrySecurityDescription = $modelRegistryOpenApi.components.securitySchemes.ServiceJwt.description
+$missingEndpointScope = $modelRegistrySecurityDescription -notmatch "model-registry\.endpoint\.manage"
+$missingModelScope = $modelRegistrySecurityDescription -notmatch "model-registry\.model\.manage"
+$missingActorClaim = $modelRegistrySecurityDescription -notmatch "actor_user_id"
+if ($missingEndpointScope -or $missingModelScope -or $missingActorClaim) {
+    throw "Model Registry Service JWT 必须声明端点、模型 scope 和操作者声明。"
+}
+$connectionTestOperation = $modelRegistryOpenApi.paths."/api/v1/model-registry/endpoints/{endpointId}/connection-tests".post
+$connectionTestMissingAccepted = $null -eq $connectionTestOperation.responses."202"
+$connectionTestMissingGatewayBoundary = $connectionTestOperation.description -notmatch "Inference Gateway"
+if ($connectionTestMissingAccepted -or $connectionTestMissingGatewayBoundary) {
+    throw "Model Registry 连接测试必须声明异步 202 和 Inference Gateway 网络边界。"
+}
+$modelRegistryOperations = @(
+    $modelRegistryOpenApi.paths."/api/v1/model-registry/endpoints".get,
+    $modelRegistryOpenApi.paths."/api/v1/model-registry/endpoints".post,
+    $modelRegistryOpenApi.paths."/api/v1/model-registry/endpoints/{endpointId}".get,
+    $modelRegistryOpenApi.paths."/api/v1/model-registry/endpoints/{endpointId}/credential".put,
+    $connectionTestOperation,
+    $modelRegistryOpenApi.paths."/api/v1/model-registry/models".get,
+    $modelRegistryOpenApi.paths."/api/v1/model-registry/models".post,
+    $modelRegistryOpenApi.paths."/api/v1/model-registry/models/{modelId}".get,
+    $modelRegistryOpenApi.paths."/api/v1/model-registry/models/{modelId}".put
+)
+foreach ($operation in $modelRegistryOperations) {
+    if ("406" -notin @($operation.responses.PSObject.Properties.Name)) {
+        throw "Model Registry 接口必须声明统一 406 响应。"
+    }
+    if ($null -ne $operation.requestBody -and "415" -notin @($operation.responses.PSObject.Properties.Name)) {
+        throw "Model Registry 带请求体接口必须声明统一 415 响应。"
+    }
+}
+$modelRegistryErrorResponses = @(
+    $modelRegistryOpenApi.components.responses.Error400,
+    $modelRegistryOpenApi.components.responses.Error401,
+    $modelRegistryOpenApi.components.responses.Error403,
+    $modelRegistryOpenApi.components.responses.Error404,
+    $modelRegistryOpenApi.components.responses.Error409,
+    $modelRegistryOpenApi.components.responses.Error500,
+    $modelRegistryOpenApi.components.responses.Error406,
+    $modelRegistryOpenApi.components.responses.Error415
+)
+foreach ($response in $modelRegistryErrorResponses) {
+    if ($null -eq $response.headers."X-Correlation-ID") {
+        throw "Model Registry 错误响应必须声明 X-Correlation-ID。"
+    }
+}
+$modelRegistryErrorPattern = $modelRegistryOpenApi.components.schemas.ErrorResponse.properties.code.pattern
+if ($modelRegistryErrorPattern -ne "^AW-MODEL_REGISTRY-[A-Z][A-Z0-9_]{1,31}-[0-9]{4}$") {
+    throw "Model Registry 错误码格式不符合公共约定。"
+}
+
 $policyRequest = $identityOpenApi.components.schemas.AuthPolicyUpdateRequest
 $policyRequired = @($policyRequest.required)
 if ("emailDomainPolicyMode" -notin $policyRequired -or "emailDomains" -notin $policyRequired) {
@@ -179,4 +260,4 @@ foreach ($eventFileName in $identityEventFiles) {
     }
 }
 
-Write-Host "公共契约和 Identity 契约校验通过。"
+Write-Host "公共契约及各服务契约校验通过。"

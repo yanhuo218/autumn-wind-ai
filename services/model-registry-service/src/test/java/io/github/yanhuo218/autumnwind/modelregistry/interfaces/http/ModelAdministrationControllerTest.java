@@ -110,7 +110,7 @@ class ModelAdministrationControllerTest {
                                 .replace("\"outputModality\":\"TEXT\"", "\"outputModality\":\"IMAGE\"")
                                 .replace("\"streaming\":true", "\"streaming\":false")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("AW-MODEL-REGISTRY-VALIDATION-0001"));
+                .andExpect(jsonPath("$.code").value("AW-MODEL_REGISTRY-VALIDATION-0001"));
 
         verify(administrationService, never()).create(any());
     }
@@ -122,7 +122,7 @@ class ModelAdministrationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createBody().replace("\"outputModality\":\"TEXT\",", "")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("AW-MODEL-REGISTRY-VALIDATION-0001"));
+                .andExpect(jsonPath("$.code").value("AW-MODEL_REGISTRY-VALIDATION-0001"));
 
         verify(administrationService, never()).create(any());
     }

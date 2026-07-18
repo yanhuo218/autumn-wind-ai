@@ -54,7 +54,7 @@ class ModelRegistryModelSecurityTest {
                                 .jwt(jwt -> jwt.claim("actor_user_id", ACTOR_ID))
                                 .authorities(new SimpleGrantedAuthority("SCOPE_model-registry.endpoint.manage"))))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("AW-MODEL-REGISTRY-FORBIDDEN-0001"));
+                .andExpect(jsonPath("$.code").value("AW-MODEL_REGISTRY-FORBIDDEN-0001"));
     }
 
     @Test
