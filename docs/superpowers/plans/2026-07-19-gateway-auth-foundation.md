@@ -129,6 +129,8 @@ build: 建立Gateway服务基础
 
 **文件：**
 
+- 修改：`services/gateway-service/pom.xml`
+- 修改：`services/gateway-service/src/main/resources/application.yaml`
 - 新建：`services/gateway-service/src/main/java/io/github/yanhuo218/autumnwind/gateway/configuration/GatewayServiceJwtProperties.java`
 - 新建：`services/gateway-service/src/main/java/io/github/yanhuo218/autumnwind/gateway/security/RsaKeyMaterial.java`
 - 新建：`services/gateway-service/src/main/java/io/github/yanhuo218/autumnwind/gateway/security/RsaKeyMaterialLoader.java`
