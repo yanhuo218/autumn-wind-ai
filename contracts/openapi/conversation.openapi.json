@@ -565,7 +565,7 @@
       "ConversationDetailView": {
         "type": "object",
         "additionalProperties": true,
-        "required": ["conversationId", "title", "createdAt", "archived", "generations"],
+        "required": ["conversationId", "title", "createdAt", "archived", "generations", "messages"],
         "properties": {
           "conversationId": { "type": "string", "format": "uuid" },
           "title": { "type": "string" },
@@ -574,8 +574,56 @@
           "generations": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/GenerationView" }
+          },
+          "messages": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/MessageView" }
           }
         }
+      },
+      "MessageRole": {
+        "type": "string",
+        "enum": ["USER", "ASSISTANT"]
+      },
+      "MessageCompleteness": {
+        "type": "string",
+        "enum": ["COMPLETE", "PARTIAL"]
+      },
+      "MessageView": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["messageId", "role", "content", "completeness", "generationId", "createdAt"],
+        "properties": {
+          "messageId": { "type": "string", "format": "uuid" },
+          "role": { "$ref": "#/components/schemas/MessageRole" },
+          "content": { "$ref": "#/components/schemas/MessageContent" },
+          "completeness": { "$ref": "#/components/schemas/MessageCompleteness" },
+          "generationId": {
+            "oneOf": [
+              { "type": "string", "format": "uuid" },
+              { "type": "null" }
+            ]
+          },
+          "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "properties": {
+                  "role": { "const": "USER" },
+                  "generationId": { "type": "null" }
+                }
+              },
+              {
+                "properties": {
+                  "role": { "const": "ASSISTANT" },
+                  "generationId": { "type": "string", "format": "uuid" }
+                }
+              }
+            ]
+          }
+        ]
       },
       "GenerationAcceptedView": {
         "type": "object",

@@ -74,6 +74,99 @@ test('成功场景输出有序 SSE 并以 SUCCEEDED 结束', async () => {
   assert.equal(snapshot.status, 'SUCCEEDED');
 });
 
+test('会话详情返回当前活动分支的用户与助手消息', async () => {
+  const conversation = await createConversation();
+  const accepted = await createGeneration(conversation.conversationId, randomUUID());
+  await readSse(accepted.eventsUrl);
+
+  const detail = await requestJson(`/api/v1/conversations/${conversation.conversationId}`);
+
+  assert.deepEqual(detail.messages.map((message) => message.role), ['USER', 'ASSISTANT']);
+  assert.equal(detail.messages[0].content.blocks[0].text, '请生成一段测试文本。');
+  assert.equal(detail.messages[0].generationId, null);
+  assert.equal(detail.messages[1].generationId, accepted.generationId);
+  assert.equal(detail.messages[1].completeness, 'COMPLETE');
+});
+
+test('会话详情按 turn 顺序投影用户与助手消息', async () => {
+  const conversation = await createConversation();
+  const first = await createGeneration(conversation.conversationId, randomUUID());
+  await readSse(first.eventsUrl);
+  const second = await createGeneration(conversation.conversationId, randomUUID());
+  await readSse(second.eventsUrl);
+
+  const detail = await requestJson(`/api/v1/conversations/${conversation.conversationId}`);
+
+  assert.deepEqual(detail.messages.map((message) => message.role), ['USER', 'ASSISTANT', 'USER', 'ASSISTANT']);
+  assert.deepEqual(detail.messages.map((message) => message.messageId), [
+    first.userMessageId,
+    first.generationId,
+    second.userMessageId,
+    second.generationId
+  ]);
+  assert.deepEqual(detail.messages.map((message) => message.generationId), [
+    null,
+    first.generationId,
+    null,
+    second.generationId
+  ]);
+});
+
+test('重新生成复用用户消息并替换活动助手分支', async () => {
+  const conversation = await createConversation();
+  const first = await createGeneration(conversation.conversationId, randomUUID());
+  await readSse(first.eventsUrl);
+  const regenerated = await requestJson(`/api/v1/generations/${first.generationId}/regenerate`, {
+    method: 'POST',
+    body: JSON.stringify({ clientRequestId: randomUUID() })
+  }, 202);
+  await readSse(regenerated.eventsUrl);
+
+  const detail = await requestJson(`/api/v1/conversations/${conversation.conversationId}`);
+
+  assert.equal(regenerated.userMessageId, first.userMessageId);
+  assert.deepEqual(detail.messages.map((message) => message.role), ['USER', 'ASSISTANT']);
+  assert.equal(detail.messages[0].messageId, first.userMessageId);
+  assert.equal(detail.messages[0].messageId, regenerated.userMessageId);
+  assert.equal(detail.messages[1].messageId, regenerated.generationId);
+  assert.equal(detail.messages[1].generationId, regenerated.generationId);
+});
+
+test('重复重新生成请求不重复投影 turn 或活动助手', async () => {
+  const conversation = await createConversation();
+  const first = await createGeneration(conversation.conversationId, randomUUID());
+  await readSse(first.eventsUrl);
+  const clientRequestId = randomUUID();
+  const regenerated = await requestJson(`/api/v1/generations/${first.generationId}/regenerate`, {
+    method: 'POST',
+    body: JSON.stringify({ clientRequestId })
+  }, 202);
+  const retried = await requestJson(`/api/v1/generations/${first.generationId}/regenerate`, {
+    method: 'POST',
+    body: JSON.stringify({ clientRequestId })
+  }, 202);
+
+  const detail = await requestJson(`/api/v1/conversations/${conversation.conversationId}`);
+
+  assert.equal(retried.generationId, regenerated.generationId);
+  assert.deepEqual(detail.messages.map((message) => message.role), ['USER', 'ASSISTANT']);
+  assert.deepEqual(detail.messages.map((message) => message.messageId), [
+    first.userMessageId,
+    regenerated.generationId
+  ]);
+  assert.equal(detail.messages[1].generationId, regenerated.generationId);
+});
+
+test('PENDING 活动助手消息标记为 PARTIAL', async () => {
+  const conversation = await createConversation();
+  const accepted = await createGeneration(conversation.conversationId, randomUUID());
+
+  const detail = await requestJson(`/api/v1/conversations/${conversation.conversationId}`);
+
+  assert.equal(detail.messages[1].generationId, accepted.generationId);
+  assert.equal(detail.messages[1].completeness, 'PARTIAL');
+});
+
 test('活动 slow SSE 显式停止后保留部分文本且不再完成', async () => {
   const conversation = await createConversation();
   const accepted = await createGeneration(conversation.conversationId, randomUUID(), 'slow');

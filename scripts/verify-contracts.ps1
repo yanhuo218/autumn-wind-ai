@@ -189,7 +189,42 @@ if (Compare-Object $expectedGenerationAcceptedFields @($generationAcceptedView.r
     throw "Conversation GenerationAcceptedView 必填字段发生漂移。"
 }
 
-foreach ($responseSchemaName in @("ConversationView", "ConversationListView", "ConversationDetailView", "GenerationAcceptedView", "GenerationView", "ErrorResponse")) {
+$conversationDetailView = $conversationOpenApi.components.schemas.ConversationDetailView
+if ("messages" -notin @($conversationDetailView.required)) {
+    throw "Conversation ConversationDetailView 必须要求 messages。"
+}
+if ($conversationDetailView.properties.messages.type -ne "array" -or $conversationDetailView.properties.messages.items.'$ref' -ne "#/components/schemas/MessageView") {
+    throw "Conversation ConversationDetailView messages 必须是 MessageView 数组。"
+}
+
+$expectedMessageRoles = @("ASSISTANT", "USER")
+if (Compare-Object $expectedMessageRoles @($conversationOpenApi.components.schemas.MessageRole.enum | Sort-Object)) {
+    throw "Conversation MessageRole 必须只暴露 USER 和 ASSISTANT。"
+}
+$expectedMessageCompleteness = @("COMPLETE", "PARTIAL")
+if (Compare-Object $expectedMessageCompleteness @($conversationOpenApi.components.schemas.MessageCompleteness.enum | Sort-Object)) {
+    throw "Conversation MessageCompleteness 集合发生漂移。"
+}
+
+$messageView = $conversationOpenApi.components.schemas.MessageView
+$expectedMessageViewFields = @("completeness", "content", "createdAt", "generationId", "messageId", "role")
+if (Compare-Object $expectedMessageViewFields @($messageView.required | Sort-Object)) {
+    throw "Conversation MessageView 必填字段发生漂移。"
+}
+$messageGenerationIdBranches = @($messageView.properties.generationId.oneOf)
+$messageGenerationIdUuidBranch = $messageGenerationIdBranches | Where-Object { $_.type -eq "string" -and $_.format -eq "uuid" }
+$messageGenerationIdNullBranch = $messageGenerationIdBranches | Where-Object { $_.type -eq "null" }
+if ($messageGenerationIdBranches.Count -ne 2 -or $null -eq $messageGenerationIdUuidBranch -or $null -eq $messageGenerationIdNullBranch) {
+    throw "Conversation MessageView generationId 必须接受 UUID 或 null。"
+}
+$messageRoleBranches = @($messageView.allOf[0].oneOf)
+$userMessageBranch = $messageRoleBranches | Where-Object { $_.properties.role.const -eq "USER" }
+$assistantMessageBranch = $messageRoleBranches | Where-Object { $_.properties.role.const -eq "ASSISTANT" }
+if (@($messageView.allOf).Count -ne 1 -or $messageRoleBranches.Count -ne 2 -or $null -eq $userMessageBranch -or $null -eq $assistantMessageBranch -or $userMessageBranch.properties.generationId.type -ne "null" -or $assistantMessageBranch.properties.generationId.type -ne "string" -or $assistantMessageBranch.properties.generationId.format -ne "uuid") {
+    throw "Conversation MessageView 必须约束 USER 为 null 且 ASSISTANT 为 UUID。"
+}
+
+foreach ($responseSchemaName in @("ConversationView", "ConversationListView", "ConversationDetailView", "GenerationAcceptedView", "GenerationView", "MessageView", "ErrorResponse")) {
     if ($conversationOpenApi.components.schemas.$responseSchemaName.additionalProperties -eq $false) {
         throw "Conversation 响应 Schema 必须允许兼容新增字段：$responseSchemaName"
     }

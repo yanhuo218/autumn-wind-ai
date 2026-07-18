@@ -12,7 +12,7 @@
 - `openapi/identity.openapi.json`：Identity Service 公共、管理和内部接口。
 - `openapi/model-registry.openapi.json`：Model Registry 端点、只写凭据、连接测试任务和模型能力接口。
 - `openapi/model-registry-internal.openapi.json`：Model Registry 推理目标解析和连接测试任务租约内部接口。
-- `openapi/conversation.openapi.json`：Conversation 会话、生成快照、停止、重新生成和 SSE 订阅接口。
+- `openapi/conversation.openapi.json`：Conversation 会话、当前活动分支消息投影、生成快照、停止、重新生成和 SSE 订阅接口。
 - `events/conversation-stream-event.v1.schema.json`：Conversation SSE `data` 字段使用的 V1 事件信封。
 - `events/inference-event.v1.schema.json`：Inference Gateway 标准推理事件。
 - `events/user-disabled.v1.schema.json`：用户禁用事实。

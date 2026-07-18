@@ -48,7 +48,8 @@ const server = createServer(async (request, response) => {
       if (request.method === 'GET') {
         return sendJson(response, 200, {
           ...toConversationView(conversation),
-          generations: conversation.generationIds.map((id) => toGenerationView(generations.get(id)))
+          generations: conversation.generationIds.map((id) => toGenerationView(generations.get(id))),
+          messages: toMessageViews(conversation)
         });
       }
       if (request.method === 'DELETE') {
@@ -130,7 +131,8 @@ async function createConversation(request, response, correlationId) {
     title: body.title ?? '新会话',
     createdAt: now,
     archived: false,
-    generationIds: []
+    generationIds: [],
+    turns: []
   };
   conversations.set(conversation.conversationId, conversation);
   return sendJson(response, 201, toConversationView(conversation));
@@ -153,6 +155,12 @@ async function createGeneration(request, response, conversation, scenario, corre
   generations.set(generation.generationId, generation);
   idempotentGenerations.set(idempotencyKey, generation.generationId);
   conversation.generationIds.push(generation.generationId);
+  conversation.turns.push({
+    userMessageId: generation.userMessageId,
+    content: generation.requestContent,
+    createdAt: generation.createdAt,
+    activeGenerationId: generation.generationId
+  });
   return sendJson(response, 202, toAcceptedView(generation));
 }
 
@@ -173,24 +181,30 @@ async function regenerate(request, response, conversation, source, scenario, cor
     return sendJson(response, 202, toAcceptedView(generations.get(existingId)));
   }
 
+  const turn = conversation.turns.find((candidate) => candidate.userMessageId === source.userMessageId);
+  if (!turn) {
+    throw new RequestError(500, errorCodes.internal, '原始用户消息不存在。');
+  }
+
   const generation = newGeneration(conversation.conversationId, {
     clientRequestId: body.clientRequestId,
     modelId: source.modelId,
     content: source.requestContent
-  }, scenario, correlationId);
+  }, scenario, correlationId, turn.userMessageId);
   generations.set(generation.generationId, generation);
   idempotentGenerations.set(idempotencyKey, generation.generationId);
   conversation.generationIds.push(generation.generationId);
+  turn.activeGenerationId = generation.generationId;
   return sendJson(response, 202, toAcceptedView(generation));
 }
 
-function newGeneration(conversationId, request, scenario, correlationId) {
+function newGeneration(conversationId, request, scenario, correlationId, userMessageId = randomUUID()) {
   const generationId = randomUUID();
   const now = new Date().toISOString();
   const generation = {
     generationId,
     conversationId,
-    userMessageId: randomUUID(),
+    userMessageId,
     clientRequestId: request.clientRequestId,
     modelId: request.modelId,
     requestContent: request.content,
@@ -387,6 +401,30 @@ function toConversationView(conversation) {
     createdAt: conversation.createdAt,
     archived: conversation.archived
   };
+}
+
+function toMessageViews(conversation) {
+  return conversation.turns.flatMap((turn) => {
+    const generation = generations.get(turn.activeGenerationId);
+    return [
+      {
+        messageId: turn.userMessageId,
+        role: 'USER',
+        content: turn.content,
+        completeness: 'COMPLETE',
+        generationId: null,
+        createdAt: turn.createdAt
+      },
+      {
+        messageId: generation.generationId,
+        role: 'ASSISTANT',
+        content: toGenerationView(generation).content,
+        completeness: generation.status === 'SUCCEEDED' ? 'COMPLETE' : 'PARTIAL',
+        generationId: generation.generationId,
+        createdAt: generation.createdAt
+      }
+    ];
+  });
 }
 
 function toAcceptedView(generation) {
