@@ -48,6 +48,31 @@ export interface ConversationClient {
   ): Promise<GenerationAcceptedView>;
 }
 
+export type ConversationMockScenario =
+  | 'success'
+  | 'slow'
+  | 'failed'
+  | 'interrupted'
+  | 'replay-reset'
+  | 'disconnect-once';
+
+export interface ConversationClientOptions {
+  scenarioProvider?: () => ConversationMockScenario | undefined;
+}
+
+const conversationMockScenarios: ReadonlySet<string> = new Set([
+  'success',
+  'slow',
+  'failed',
+  'interrupted',
+  'replay-reset',
+  'disconnect-once'
+]);
+
+export function isConversationMockScenario(value?: string): value is ConversationMockScenario {
+  return Boolean(value && conversationMockScenarios.has(value));
+}
+
 function jsonRequest(method: string, body: unknown, signal?: AbortSignal): RequestInit {
   return {
     method,
@@ -61,13 +86,30 @@ function generationPath(generationId: string): string {
   return `/api/v1/generations/${encodeURIComponent(generationId)}`;
 }
 
+function scenarioPath(
+  path: string,
+  scenarioProvider?: () => ConversationMockScenario | undefined
+): string {
+  const scenario = scenarioProvider?.();
+  if (!isConversationMockScenario(scenario)) {
+    return path;
+  }
+
+  const url = new URL(path, 'https://autumn-wind.invalid');
+  url.searchParams.set('scenario', scenario);
+  return `${url.pathname}${url.search}`;
+}
+
 function validateAcceptedLinks(value: GenerationAcceptedView): GenerationAcceptedView {
   assertApiPath(value.statusUrl);
   assertApiPath(value.eventsUrl);
   return value;
 }
 
-export function createConversationClient(fetchImpl: typeof fetch = fetch): ConversationClient {
+export function createConversationClient(
+  fetchImpl: typeof fetch = fetch,
+  options: ConversationClientOptions = {}
+): ConversationClient {
   return {
     listConversations(signal) {
       return fetchJson(fetchImpl, '/api/v1/conversations', isConversationListView, { signal });
@@ -101,7 +143,10 @@ export function createConversationClient(fetchImpl: typeof fetch = fetch): Conve
     async createGeneration(conversationId, request, signal) {
       const value = await fetchJson(
         fetchImpl,
-        `/api/v1/conversations/${encodeURIComponent(conversationId)}/generations`,
+        scenarioPath(
+          `/api/v1/conversations/${encodeURIComponent(conversationId)}/generations`,
+          options.scenarioProvider
+        ),
         isGenerationAcceptedView,
         jsonRequest('POST', request, signal)
       );
@@ -146,7 +191,7 @@ export function createConversationClient(fetchImpl: typeof fetch = fetch): Conve
     async regenerate(generationId, request, signal) {
       const value = await fetchJson(
         fetchImpl,
-        `${generationPath(generationId)}/regenerate`,
+        scenarioPath(`${generationPath(generationId)}/regenerate`, options.scenarioProvider),
         isGenerationAcceptedView,
         jsonRequest('POST', request, signal)
       );

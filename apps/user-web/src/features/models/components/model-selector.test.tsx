@@ -100,4 +100,22 @@ describe('ModelSelector', () => {
 
     expect(screen.getByTestId('model-selector-label').classList.contains('aw-model-selector__label')).toBe(true);
   });
+
+  it('从空值切换到有效模型时保持受控且不产生告警', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const { rerender } = render(
+        <ModelSelector models={models} value={undefined} onValueChange={vi.fn()} />
+      );
+
+      rerender(<ModelSelector models={models} value={models[0].id} onValueChange={vi.fn()} />);
+
+      expect(consoleError).not.toHaveBeenCalled();
+      expect(consoleWarn).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+      consoleWarn.mockRestore();
+    }
+  });
 });

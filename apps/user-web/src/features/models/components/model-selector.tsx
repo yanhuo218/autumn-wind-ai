@@ -32,7 +32,7 @@ function CapabilityIcons({ model }: { model: ModelView }) {
 
 export function ModelSelector({ models, value, onValueChange, disabled = false }: ModelSelectorProps) {
   return (
-    <Select.Root value={value} onValueChange={onValueChange} disabled={disabled || models.length === 0}>
+    <Select.Root value={value ?? ''} onValueChange={onValueChange} disabled={disabled || models.length === 0}>
       <Select.Trigger className="aw-model-selector" aria-label="选择模型">
         <span data-testid="model-selector-label" className="aw-model-selector__label">
           <Select.Value placeholder="选择模型" />

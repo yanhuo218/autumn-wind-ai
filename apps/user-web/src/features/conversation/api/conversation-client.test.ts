@@ -134,6 +134,48 @@ describe('ConversationClient', () => {
     ).resolves.toEqual(accepted);
   });
 
+  it('仅在显式提供开发场景时给创建和重新生成请求追加 scenario', async () => {
+    const requests: Request[] = [];
+    const fetchImpl: typeof fetch = vi.fn(async (input, init) => {
+      requests.push(capturedRequest(input, init));
+      return jsonResponse(accepted, 202);
+    });
+    const client = createConversationClient(fetchImpl, {
+      scenarioProvider: () => 'disconnect-once'
+    });
+
+    await client.createGeneration(conversationId, {
+      clientRequestId: requestId,
+      modelId,
+      content: { schemaVersion: 1, blocks: [{ type: 'text', text: 'Mock prompt' }] }
+    });
+    await client.regenerate(generationId, { clientRequestId: requestId });
+
+    expect(requests.map((request) => new URL(request.url).searchParams.get('scenario'))).toEqual([
+      'disconnect-once',
+      'disconnect-once'
+    ]);
+  });
+
+  it('在客户端边界忽略运行时传入的未知场景', async () => {
+    let request: Request | undefined;
+    const fetchImpl: typeof fetch = vi.fn(async (input, init) => {
+      request = capturedRequest(input, init);
+      return jsonResponse(accepted, 202);
+    });
+    const client = createConversationClient(fetchImpl, {
+      scenarioProvider: () => 'unknown-scenario' as never
+    });
+
+    await client.createGeneration(conversationId, {
+      clientRequestId: requestId,
+      modelId,
+      content: { schemaVersion: 1, blocks: [{ type: 'text', text: 'Mock prompt' }] }
+    });
+
+    expect(new URL(request?.url ?? 'https://mock.invalid').searchParams.has('scenario')).toBe(false);
+  });
+
   it.each([
     'https://external.invalid/api/v1/events',
     'http://external.invalid/api/v1/events',

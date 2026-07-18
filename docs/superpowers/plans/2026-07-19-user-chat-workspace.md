@@ -749,6 +749,12 @@ feat: 完善生成重连与失败恢复
 - 新建：`apps/user-web/e2e/responsive-layout.spec.ts`
 - 修改：`apps/user-web/package.json`
 - 修改：`package.json`
+- 修改：`apps/user-web/src/features/conversation/api/conversation-client.ts`
+- 修改：`apps/user-web/src/features/conversation/api/conversation-client.test.ts`
+- 修改：`apps/user-web/src/features/models/components/model-selector.tsx`
+- 修改：`apps/user-web/src/routes/chat-route.tsx`
+- 修改：`apps/user-web/vitest.config.ts`
+- 修改：`.gitignore`
 - 新建：`docs/development/user-web.md`
 - 修改：`README.md`
 
@@ -758,11 +764,11 @@ feat: 完善生成重连与失败恢复
 - `webServer` 同时启动根 `pnpm mock:conversation` 和用户端 Vite，均设置 `reuseExistingServer: false`、固定端口和合理超时。
 - 测试通过 URL 查询参数选择仅开发可用的 Mock 场景；生产构建忽略该参数。
 
-- [ ] **Step 1：先写桌面关键流程 E2E**
+- [x] **Step 1：先写桌面关键流程 E2E**
 
 覆盖：进入 `/chat`、选择模型、新建会话、发送成功、停止 slow、failed 错误与关联 ID、interrupted、重新生成、断线续传和 `replay.reset` 快照替换。
 
-- [ ] **Step 2：写响应式与键盘 E2E**
+- [x] **Step 2：写响应式与键盘 E2E**
 
 逐一验证 `1440×900`、`1024×768`、`800×900`、`768×1024`、`390×844`、`360×800`。断言：
 
@@ -772,19 +778,19 @@ expect(await page.evaluate(() => document.documentElement.scrollWidth <= documen
 
 同时覆盖抽屉、唯一模型入口、长名称省略、`Esc` 焦点恢复、Tab 顺序、Enter/Shift+Enter、reduced motion 和图标可访问名称。
 
-- [ ] **Step 3：实现仅开发 Mock 场景选择**
+- [x] **Step 3：实现仅开发 Mock 场景选择**
 
 只在 `import.meta.env.DEV` 读取 `scenario`，允许值固定 `success/slow/failed/interrupted/replay-reset/disconnect-once`；生产构建不拼接 `scenario`。
 
-- [ ] **Step 4：运行截图与重叠检查**
+- [x] **Step 4：运行截图与重叠检查**
 
 主代理启动本地服务后，用 Playwright 在 `1440×900`、`800×900`、`390×844` 截图，检查非空、侧栏/抽屉、消息列、输入区、状态轨、长文本和弹层无重叠。截图保存在 `.superpowers/` 本地评审目录，不提交仓库。
 
-- [ ] **Step 5：编写中文开发说明**
+- [x] **Step 5：编写中文开发说明**
 
 `docs/development/user-web.md` 记录依赖版本、目录边界、启动命令、Mock/HTTP 模型目录切换、开发代理、测试命令和“Mock 不是生产服务”。不记录任何真实凭据。
 
-- [ ] **Step 6：运行完整前端验证**
+- [x] **Step 6：运行完整前端验证**
 
 ```powershell
 ./scripts/verify-contracts.ps1
@@ -798,11 +804,11 @@ git diff --check
 
 预期：契约、类型检查、Vitest、生产构建与 Playwright 全部通过；六个视口无横向溢出或控件重叠。
 
-- [ ] **Step 7：安全与范围检查**
+- [x] **Step 7：安全与范围检查**
 
 确认暂存文件不包含 `.agents/`、`AGENTS.md`、`.codex/`、真实端点、API Key、Token、Cookie、Authorization Header、用户对话或本地截图。
 
-- [ ] **Step 8：评审通过后提交并启动开发服务器**
+- [x] **Step 8：评审通过后提交并启动开发服务器**
 
 ```text
 test: 覆盖用户端聊天关键流程

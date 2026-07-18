@@ -5,7 +5,12 @@ import { useNavigate, useParams } from 'react-router';
 import type { MessageView } from '@autumn-wind/api-contracts';
 
 import { AppShell } from '../components/app-shell';
-import { createConversationClient, type ConversationClient } from '../features/conversation/api/conversation-client';
+import {
+  createConversationClient,
+  isConversationMockScenario,
+  type ConversationClient,
+  type ConversationMockScenario
+} from '../features/conversation/api/conversation-client';
 import { ConversationSidebar } from '../features/conversation/components/conversation-sidebar';
 import { Composer } from '../features/conversation/components/composer';
 import { MessageList } from '../features/conversation/components/message-list';
@@ -14,7 +19,19 @@ import { createModelCatalog, getDefaultModelId, type ModelCatalog } from '../fea
 import { ModelSelector } from '../features/models/components/model-selector';
 import { conversationKeys, queryClient } from '../lib/query-client';
 
-const defaultConversationClient = createConversationClient();
+function readInitialDevScenario(): ConversationMockScenario | undefined {
+  if (!import.meta.env.DEV || typeof window === 'undefined') {
+    return undefined;
+  }
+
+  const scenario = new URL(window.location.href).searchParams.get('scenario') ?? undefined;
+  return isConversationMockScenario(scenario) ? scenario : undefined;
+}
+
+const devScenario = readInitialDevScenario();
+const defaultConversationClient = createConversationClient(fetch, {
+  scenarioProvider: () => devScenario
+});
 const defaultModelCatalog = createModelCatalog(
   import.meta.env.PROD || import.meta.env.VITE_MODEL_CATALOG_MODE === 'http' ? 'http' : 'mock'
 );
