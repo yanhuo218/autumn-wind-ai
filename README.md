@@ -2,7 +2,7 @@
 
 Autumn Wind Ai 是一个面向多用户场景的 BYOK（Bring Your Own Key）AI 对话平台。平台本身不提供固定模型端点，每位用户可以安全配置自己的 OpenAI-compatible API 地址、密钥和模型能力。
 
-> 当前项目处于阶段 3，已完成工程与基础设施基线，正在交付身份、通知和管理基础能力。
+> 当前项目处于阶段 4，已完成身份、通知和管理基础能力，正在交付用户端点、模型注册与文本推理闭环。
 
 ## 产品目标
 
@@ -52,9 +52,10 @@ Autumn Wind Ai 是一个面向多用户场景的 BYOK（Bring Your Own Key）AI 
 - [公共契约约定](docs/development/contract-conventions.md)
 - [SecretStore 凭据保护](docs/development/secret-store.md)
 - [Identity Service 开发说明](docs/development/identity-service.md)
+- [Model Registry 领域规则设计](docs/superpowers/specs/2026-07-18-model-registry-domain-design.md)
 
 设计规格包含产品范围、页面参照、技术边界、服务职责、核心流程、数据归属、安全要求、测试策略和 V1 验收标准。
 
 ## 开发状态
 
-阶段 1 和阶段 2 已完成。阶段 3 已建立 Identity Service 契约、Spring Boot 骨架、首个数据库迁移和核心认证策略测试，下一批实现注册、登录与会话闭环。
+阶段 1 至阶段 3 已完成。阶段 4 已建立 Model Registry 独立服务骨架和首批端点、模型能力领域规则，下一批接入 PostgreSQL、SecretStore 和用户管理接口。
