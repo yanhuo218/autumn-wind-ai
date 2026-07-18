@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.util.Objects;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -65,6 +66,14 @@ public class ModelAdministrationService {
     @Transactional(readOnly = true)
     public ModelView get(UUID ownerUserId, UUID modelId) {
         return ModelView.from(ownedModel(ownerUserId, modelId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ModelView> list(UUID ownerUserId) {
+        Objects.requireNonNull(ownerUserId, "模型所有者不能为空。");
+        return modelRepository.findAllByOwnerUserIdOrderByCreatedAtAsc(ownerUserId).stream()
+                .map(ModelView::from)
+                .toList();
     }
 
     @Transactional

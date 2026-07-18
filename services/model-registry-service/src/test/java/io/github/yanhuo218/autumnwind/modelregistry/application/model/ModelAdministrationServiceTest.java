@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -139,6 +140,17 @@ class ModelAdministrationServiceTest {
 
         assertEquals(MODEL_ID, view.id());
         assertEquals(OWNER_ID, view.ownerUserId());
+    }
+
+    @Test
+    void 列出模型时按所有者映射能力视图() {
+        when(modelRepository.findAllByOwnerUserIdOrderByCreatedAtAsc(OWNER_ID)).thenReturn(List.of(model()));
+
+        List<ModelView> views = service.list(OWNER_ID);
+
+        assertEquals(1, views.size());
+        assertEquals(OWNER_ID, views.getFirst().ownerUserId());
+        assertEquals(ModelInterfaceType.CHAT_COMPLETIONS, views.getFirst().capabilities().interfaceType());
     }
 
     @Test

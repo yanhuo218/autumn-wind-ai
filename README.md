@@ -59,4 +59,4 @@ Autumn Wind Ai 是一个面向多用户场景的 BYOK（Bring Your Own Key）AI 
 
 ## 开发状态
 
-阶段 1 至阶段 3 已完成。阶段 4 已建立 Model Registry 独立服务、领域规则、端点与模型能力持久化和 SecretStore 凭据引用，下一批实现 Model Registry 管理 HTTP 与连接测试任务边界。
+阶段 1 至阶段 3 已完成。阶段 4 已建立 Model Registry 独立服务、领域规则、端点与模型能力持久化、SecretStore 凭据引用和用户管理 HTTP，下一批补齐 Model Registry OpenAPI 与连接测试任务边界。

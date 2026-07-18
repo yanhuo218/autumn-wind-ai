@@ -30,6 +30,7 @@ import java.util.UUID;
 public class ModelRegistrySecurityConfiguration {
 
     private static final String ENDPOINT_MANAGE_AUTHORITY = "SCOPE_model-registry.endpoint.manage";
+    private static final String MODEL_MANAGE_AUTHORITY = "SCOPE_model-registry.model.manage";
 
     @Bean
     JwtDecoder modelRegistryServiceJwtDecoder(ServiceJwtProperties properties, Clock clock) {
@@ -68,6 +69,16 @@ public class ModelRegistrySecurityConfiguration {
                         .requestMatchers(HttpMethod.PUT, "/api/v1/model-registry/endpoints/*/credential")
                         .access((authentication, context) -> new AuthorizationDecision(
                                 mayManageEndpoints(authentication.get())))
+                        .requestMatchers(HttpMethod.GET, "/api/v1/model-registry/models",
+                                "/api/v1/model-registry/models/*")
+                        .access((authentication, context) -> new AuthorizationDecision(
+                                mayManageModels(authentication.get())))
+                        .requestMatchers(HttpMethod.POST, "/api/v1/model-registry/models")
+                        .access((authentication, context) -> new AuthorizationDecision(
+                                mayManageModels(authentication.get())))
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/model-registry/models/*")
+                        .access((authentication, context) -> new AuthorizationDecision(
+                                mayManageModels(authentication.get())))
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(jwt -> jwt.decoder(modelRegistryServiceJwtDecoder))
@@ -83,8 +94,16 @@ public class ModelRegistrySecurityConfiguration {
     }
 
     private static boolean mayManageEndpoints(Authentication authentication) {
+        return mayManage(authentication, ENDPOINT_MANAGE_AUTHORITY);
+    }
+
+    private static boolean mayManageModels(Authentication authentication) {
+        return mayManage(authentication, MODEL_MANAGE_AUTHORITY);
+    }
+
+    private static boolean mayManage(Authentication authentication, String requiredAuthority) {
         if (authentication == null || authentication.getAuthorities().stream()
-                .noneMatch(authority -> ENDPOINT_MANAGE_AUTHORITY.equals(authority.getAuthority()))) {
+                .noneMatch(authority -> requiredAuthority.equals(authority.getAuthority()))) {
             return false;
         }
         if (!(authentication instanceof JwtAuthenticationToken jwtAuthentication)) {
