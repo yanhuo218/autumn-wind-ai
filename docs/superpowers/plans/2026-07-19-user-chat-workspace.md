@@ -208,6 +208,7 @@ feat: 补充会话消息只读投影
 - 新建：`apps/user-web/vitest.config.ts`
 - 新建：`apps/user-web/src/main.tsx`
 - 新建：`apps/user-web/src/app.tsx`
+- 新建：`apps/user-web/src/app.test.tsx`
 - 新建：`apps/user-web/src/test/setup.ts`
 
 **接口：**
@@ -222,9 +223,9 @@ feat: 补充会话消息只读投影
 
 ```json
 {
-  "contracts:frontend": "pnpm --filter @autumn-wind/api-contracts generate",
-  "dev:user-web": "pnpm --filter @autumn-wind/user-web dev",
-  "test:user-web": "pnpm --filter @autumn-wind/user-web test"
+  "contracts:frontend": "pnpm --filter @autumn-wind/api-contracts --fail-if-no-match generate",
+  "dev:user-web": "pnpm --filter @autumn-wind/user-web --fail-if-no-match dev",
+  "test:user-web": "pnpm --filter @autumn-wind/user-web --fail-if-no-match test"
 }
 ```
 
@@ -269,6 +270,7 @@ feat: 补充会话消息只读投影
   "devDependencies": {
     "@playwright/test": "1.61.1",
     "@tailwindcss/vite": "4.3.3",
+    "@testing-library/dom": "10.4.1",
     "@testing-library/react": "16.3.2",
     "@testing-library/user-event": "14.6.1",
     "@types/node": "26.1.1",
@@ -334,7 +336,7 @@ server: {
 }
 ```
 
-最小 `App` 只渲染 `<main data-testid="user-web-root" />`，不提前实现页面。
+最小 `App` 只渲染 `<main data-testid="user-web-root" />`，不提前实现页面。增加一项真实渲染 smoke test，并保持 Vitest 在零测试发现时失败，不使用 `passWithNoTests`。
 
 - [ ] **Step 6：安装、生成和验证**
 
@@ -348,7 +350,7 @@ pnpm --filter @autumn-wind/user-web build
 git diff --check
 ```
 
-预期：SSE 与 HTTP 响应运行时校验测试通过，两个包类型检查通过，用户端构建成功。
+预期：SSE 与 HTTP 响应运行时校验测试通过，用户端 smoke test 1 项通过，两个包类型检查通过，用户端构建成功。
 
 - [ ] **Step 7：评审通过后提交**
 

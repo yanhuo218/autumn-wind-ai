@@ -11,7 +11,15 @@
     "build": "pnpm -r --if-present build",
     "check": "pnpm -r --if-present check",
     "test": "pnpm -r --if-present test",
+    "contracts:frontend": "pnpm --filter @autumn-wind/api-contracts --fail-if-no-match generate",
+    "dev:user-web": "pnpm --filter @autumn-wind/user-web --fail-if-no-match dev",
+    "test:user-web": "pnpm --filter @autumn-wind/user-web --fail-if-no-match test",
     "mock:conversation": "node scripts/mock-conversation-api.mjs",
     "test:conversation-mock": "node --test scripts/tests/mock-conversation-api.test.mjs"
+  },
+  "devDependencies": {
+    "json-schema-to-typescript": "15.0.4",
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
   }
 }
