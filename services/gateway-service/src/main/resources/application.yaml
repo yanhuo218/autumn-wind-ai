@@ -11,6 +11,12 @@ management:
     web:
       exposure:
         include: health,info
+service-jwt:
+  issuer: ${GATEWAY_SERVICE_JWT_ISSUER}
+  private-key-path: ${GATEWAY_SERVICE_JWT_PRIVATE_KEY_PATH}
+  public-key-path: ${GATEWAY_SERVICE_JWT_PUBLIC_KEY_PATH}
+  key-id: ${GATEWAY_SERVICE_JWT_KEY_ID}
+  lifetime: PT60S
 autumn-wind:
   gateway:
     downstream:
