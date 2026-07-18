@@ -210,6 +210,7 @@ feat: 建立Gateway服务JWT边界
 - 新建：`services/gateway-service/src/main/java/io/github/yanhuo218/autumnwind/gateway/configuration/GatewaySecurityConfiguration.java`
 - 新建：`services/gateway-service/src/main/java/io/github/yanhuo218/autumnwind/gateway/identity/IdentityAuthProxyClient.java`
 - 新建：`services/gateway-service/src/main/java/io/github/yanhuo218/autumnwind/gateway/identity/IdentityAuthProxyController.java`
+- 新建：`services/gateway-service/src/main/java/io/github/yanhuo218/autumnwind/gateway/web/ProxyResponse.java`
 - 新建：`services/gateway-service/src/main/java/io/github/yanhuo218/autumnwind/gateway/web/GatewayErrorResponseWriter.java`
 - 测试：`services/gateway-service/src/test/java/io/github/yanhuo218/autumnwind/gateway/identity/IdentityAuthProxyControllerTest.java`
 - 测试：`services/gateway-service/src/test/java/io/github/yanhuo218/autumnwind/gateway/configuration/GatewaySecurityConfigurationTest.java`
