@@ -50,6 +50,8 @@ mvn "-Dmaven.repo.local=$((Resolve-Path .).Path)\.m2\repository" -pl services/id
 
 管理员通过 `GET /api/v1/admin/auth-policy` 读取完整认证策略，通过 `PUT /api/v1/admin/auth-policy` 更新策略。更新请求必须携带管理员会话、CSRF Token 和上次读取到的 `ETag`；版本不匹配返回 `409`，不会覆盖其他管理员的修改。邮箱域列表最多 500 项，登录锁定时长最多 1440 分钟，与数据库约束保持一致。
 
+管理员用户管理当前提供分页查询、按邮箱或显示名称搜索、按账户状态筛选，以及禁用、启用和撤销全部会话。禁用账户会先校验状态转换，再使用同一事务撤销现有会话；删除流程和管理员创建用户尚未在本批次开放。
+
 浏览器首次进入认证页面时，应先请求 `GET /api/v1/auth/csrf`。服务返回 HttpOnly 的 `AW_CSRF` Cookie，并在响应正文和 `X-CSRF-TOKEN` Header 中返回对应的掩码 Token。后续注册、登录和注销请求必须由浏览器自动携带 `AW_CSRF` Cookie，同时把掩码 Token 放入 `X-CSRF-TOKEN` Header；前端不得尝试读取 Cookie，也不得记录 Token。
 
 登录成功后服务设置 host-only 的 `AW_SESSION` Cookie，属性固定为 `HttpOnly`、`Secure`、`SameSite=Lax` 和 `Path=/`，不设置 `Domain`。注销使用相同属性和 `Max-Age=0` 清除 Cookie。重复同名会话 Cookie 按无效会话处理；无效 Cookie 不阻断公开注册或登录，但受保护接口统一返回 `401`。

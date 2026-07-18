@@ -159,6 +159,22 @@ public class UserEntity {
         return emailVerifiedAt != null;
     }
 
+    public void disable(Instant now) {
+        if (!status.canTransitionTo(AccountStatus.DISABLED)) {
+            throw new IllegalStateException("当前账户状态不允许禁用。");
+        }
+        status = AccountStatus.DISABLED;
+        updatedAt = Objects.requireNonNull(now, "更新时间不能为空。");
+    }
+
+    public void enable(Instant now) {
+        if (!status.canTransitionTo(AccountStatus.ACTIVE)) {
+            throw new IllegalStateException("当前账户状态不允许启用。");
+        }
+        status = AccountStatus.ACTIVE;
+        updatedAt = Objects.requireNonNull(now, "更新时间不能为空。");
+    }
+
     public Instant createdAt() {
         return createdAt;
     }

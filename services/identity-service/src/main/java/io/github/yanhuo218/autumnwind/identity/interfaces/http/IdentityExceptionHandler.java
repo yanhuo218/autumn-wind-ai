@@ -85,6 +85,8 @@ public class IdentityExceptionHandler {
             case AUTHENTICATION_FAILED, INVALID_SESSION, INVALID_SERVICE_TOKEN -> HttpStatus.UNAUTHORIZED;
             case REGISTRATION_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
             case VERSION_CONFLICT -> HttpStatus.CONFLICT;
+            case ACCOUNT_STATE_CONFLICT -> HttpStatus.CONFLICT;
+            case USER_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case POLICY_UNAVAILABLE, INTERNAL_ERROR -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
     }
