@@ -1,0 +1,322 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autumn-wind.ai/contracts/events/conversation-stream-event.v1.schema.json",
+  "title": "Conversation Stream Event V1",
+  "description": "Conversation 生成流的 SSE data 信封。",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventType", "generationId", "sequence", "occurredAt", "payloadVersion", "payload"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/eventId" },
+        "eventType": { "const": "generation.started" },
+        "generationId": { "$ref": "#/$defs/generationId" },
+        "sequence": { "$ref": "#/$defs/sequence" },
+        "occurredAt": { "$ref": "#/$defs/occurredAt" },
+        "payloadVersion": { "$ref": "#/$defs/payloadVersion" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": { "const": "STREAMING" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventType", "generationId", "sequence", "occurredAt", "payloadVersion", "payload"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/eventId" },
+        "eventType": { "const": "reasoning.delta" },
+        "generationId": { "$ref": "#/$defs/generationId" },
+        "sequence": { "$ref": "#/$defs/sequence" },
+        "occurredAt": { "$ref": "#/$defs/occurredAt" },
+        "payloadVersion": { "$ref": "#/$defs/payloadVersion" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["delta"],
+          "properties": {
+            "delta": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventType", "generationId", "sequence", "occurredAt", "payloadVersion", "payload"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/eventId" },
+        "eventType": { "const": "content.delta" },
+        "generationId": { "$ref": "#/$defs/generationId" },
+        "sequence": { "$ref": "#/$defs/sequence" },
+        "occurredAt": { "$ref": "#/$defs/occurredAt" },
+        "payloadVersion": { "$ref": "#/$defs/payloadVersion" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["delta"],
+          "properties": {
+            "delta": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventType", "generationId", "sequence", "occurredAt", "payloadVersion", "payload"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/eventId" },
+        "eventType": { "const": "content.checkpoint" },
+        "generationId": { "$ref": "#/$defs/generationId" },
+        "sequence": { "$ref": "#/$defs/sequence" },
+        "occurredAt": { "$ref": "#/$defs/occurredAt" },
+        "payloadVersion": { "$ref": "#/$defs/payloadVersion" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["content", "throughSequence"],
+          "properties": {
+            "content": { "$ref": "#/$defs/messageContent" },
+            "throughSequence": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventType", "generationId", "sequence", "occurredAt", "payloadVersion", "payload"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/eventId" },
+        "eventType": { "const": "usage.updated" },
+        "generationId": { "$ref": "#/$defs/generationId" },
+        "sequence": { "$ref": "#/$defs/sequence" },
+        "occurredAt": { "$ref": "#/$defs/occurredAt" },
+        "payloadVersion": { "$ref": "#/$defs/payloadVersion" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["promptTokens", "completionTokens", "totalTokens"],
+          "properties": {
+            "promptTokens": { "$ref": "#/$defs/nullableTokenCount" },
+            "completionTokens": { "$ref": "#/$defs/nullableTokenCount" },
+            "totalTokens": { "$ref": "#/$defs/nullableTokenCount" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventType", "generationId", "sequence", "occurredAt", "payloadVersion", "payload"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/eventId" },
+        "eventType": { "const": "generation.completed" },
+        "generationId": { "$ref": "#/$defs/generationId" },
+        "sequence": { "$ref": "#/$defs/sequence" },
+        "occurredAt": { "$ref": "#/$defs/occurredAt" },
+        "payloadVersion": { "$ref": "#/$defs/payloadVersion" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": { "const": "SUCCEEDED" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventType", "generationId", "sequence", "occurredAt", "payloadVersion", "payload"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/eventId" },
+        "eventType": { "const": "generation.failed" },
+        "generationId": { "$ref": "#/$defs/generationId" },
+        "sequence": { "$ref": "#/$defs/sequence" },
+        "occurredAt": { "$ref": "#/$defs/occurredAt" },
+        "payloadVersion": { "$ref": "#/$defs/payloadVersion" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "code", "message", "correlationId"],
+          "properties": {
+            "status": { "const": "FAILED" },
+            "code": { "$ref": "#/$defs/errorCode" },
+            "message": { "type": "string", "minLength": 1 },
+            "correlationId": { "type": "string", "format": "uuid" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventType", "generationId", "sequence", "occurredAt", "payloadVersion", "payload"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/eventId" },
+        "eventType": { "const": "generation.stopped" },
+        "generationId": { "$ref": "#/$defs/generationId" },
+        "sequence": { "$ref": "#/$defs/sequence" },
+        "occurredAt": { "$ref": "#/$defs/occurredAt" },
+        "payloadVersion": { "$ref": "#/$defs/payloadVersion" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": { "const": "STOPPED" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventType", "generationId", "sequence", "occurredAt", "payloadVersion", "payload"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/eventId" },
+        "eventType": { "const": "generation.interrupted" },
+        "generationId": { "$ref": "#/$defs/generationId" },
+        "sequence": { "$ref": "#/$defs/sequence" },
+        "occurredAt": { "$ref": "#/$defs/occurredAt" },
+        "payloadVersion": { "$ref": "#/$defs/payloadVersion" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "code", "message", "correlationId"],
+          "properties": {
+            "status": { "const": "INTERRUPTED" },
+            "code": { "$ref": "#/$defs/errorCode" },
+            "message": { "type": "string", "minLength": 1 },
+            "correlationId": { "type": "string", "format": "uuid" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventType", "generationId", "sequence", "occurredAt", "payloadVersion", "payload"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/eventId" },
+        "eventType": { "const": "stream.heartbeat" },
+        "generationId": { "$ref": "#/$defs/generationId" },
+        "sequence": { "$ref": "#/$defs/sequence" },
+        "occurredAt": { "$ref": "#/$defs/occurredAt" },
+        "payloadVersion": { "$ref": "#/$defs/payloadVersion" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "eventType", "generationId", "sequence", "occurredAt", "payloadVersion", "payload"],
+      "properties": {
+        "eventId": { "$ref": "#/$defs/eventId" },
+        "eventType": { "const": "replay.reset" },
+        "generationId": { "$ref": "#/$defs/generationId" },
+        "sequence": { "$ref": "#/$defs/sequence" },
+        "occurredAt": { "$ref": "#/$defs/occurredAt" },
+        "payloadVersion": { "$ref": "#/$defs/payloadVersion" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["snapshotUrl"],
+          "description": "客户端收到后必须用快照替换本地生成内容。",
+          "properties": {
+            "snapshotUrl": { "type": "string", "format": "uri-reference" }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "eventId": {
+      "type": "string",
+      "minLength": 16,
+      "maxLength": 64
+    },
+    "generationId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payloadVersion": {
+      "const": 1
+    },
+    "nullableTokenCount": {
+      "oneOf": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "null" }
+      ]
+    },
+    "errorCode": {
+      "type": "string",
+      "pattern": "^AW-CONVERSATION-(NOT_FOUND|CONFLICT|VALIDATION|DEPENDENCY|RATE_LIMIT|INTERNAL)-[0-9]{4}$"
+    },
+    "messageContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "blocks"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "blocks": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["type", "text"],
+                "properties": {
+                  "type": { "const": "text" },
+                  "text": { "type": "string", "minLength": 1 }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["type", "resourceId"],
+                "properties": {
+                  "type": { "const": "image_ref" },
+                  "resourceId": { "type": "string", "format": "uuid" }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["type", "resourceId"],
+                "properties": {
+                  "type": { "const": "file_ref" },
+                  "resourceId": { "type": "string", "format": "uuid" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

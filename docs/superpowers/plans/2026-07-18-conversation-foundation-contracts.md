@@ -342,7 +342,7 @@ build: 建立会话服务领域基线
 - Mock 启动命令：`pnpm mock:conversation`，默认监听 `127.0.0.1:4174`。
 - Mock 测试命令：`pnpm test:conversation-mock`。
 
-- [ ] **Step 1：先扩展契约校验并观察红灯**
+- [x] **Step 1：先扩展契约校验并观察红灯**
 
 在 `scripts/verify-contracts.ps1` 中读取两个尚不存在的契约，并加入以下精确断言：
 
@@ -382,7 +382,7 @@ if ($conversationStreamSchema.'$schema' -ne "https://json-schema.org/draft/2020-
 
 预期：因 `conversation.openapi.json` 不存在而失败。
 
-- [ ] **Step 2：编写完整公共 OpenAPI 并观察契约部分绿灯**
+- [x] **Step 2：编写完整公共 OpenAPI 并观察契约部分绿灯**
 
 `conversation.openapi.json` 必须定义以下操作与成功状态：
 
@@ -413,7 +413,7 @@ if ($conversationStreamSchema.'$schema' -ne "https://json-schema.org/draft/2020-
 
 完成后运行 Step 1。此时预期只因 SSE Schema 尚不存在或不完整而失败。
 
-- [ ] **Step 3：编写 SSE Schema 并完成契约绿灯**
+- [x] **Step 3：编写 SSE Schema 并完成契约绿灯**
 
 Schema 使用 `oneOf` 定义以下事件，公共字段全部必填：
 
@@ -460,7 +460,7 @@ Payload 规则：
 
 预期：公共契约及各服务契约校验通过。
 
-- [ ] **Step 4：先编写 Mock API 红灯测试**
+- [x] **Step 4：先编写 Mock API 红灯测试**
 
 使用 Node.js 内置 `node:test`、`assert`、`child_process` 和 `fetch`，不增加 npm 依赖。测试启动随机可用端口并覆盖：
 
@@ -497,7 +497,7 @@ node --test scripts/tests/mock-conversation-api.test.mjs
 
 预期：因 `scripts/mock-conversation-api.mjs` 不存在而失败。
 
-- [ ] **Step 5：实现无依赖 Mock API 与 Fake SSE 并观察绿灯**
+- [x] **Step 5：实现无依赖 Mock API 与 Fake SSE 并观察绿灯**
 
 Mock 只绑定 `127.0.0.1`，使用进程内 Map 保存会话和生成；测试占位数据不得包含真实凭据。支持以下场景：
 
@@ -520,7 +520,7 @@ data: <JSON 信封>
 
 运行 Step 4，预期全部通过且子进程正常退出。
 
-- [ ] **Step 6：接入 pnpm 命令并更新中文契约说明**
+- [x] **Step 6：接入 pnpm 命令并更新中文契约说明**
 
 在根 `package.json` 的 `scripts` 中加入：
 
@@ -533,7 +533,7 @@ data: <JSON 信封>
 
 `contracts/README.md` 增加 Conversation OpenAPI、SSE Schema、Mock 启动方式和“Mock 不是生产服务”的边界说明。
 
-- [ ] **Step 7：运行 Task 2 验证**
+- [x] **Step 7：运行 Task 2 验证**
 
 ```powershell
 ./scripts/verify-contracts.ps1

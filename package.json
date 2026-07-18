@@ -10,6 +10,8 @@
   "scripts": {
     "build": "pnpm -r --if-present build",
     "check": "pnpm -r --if-present check",
-    "test": "pnpm -r --if-present test"
+    "test": "pnpm -r --if-present test",
+    "mock:conversation": "node scripts/mock-conversation-api.mjs",
+    "test:conversation-mock": "node --test scripts/tests/mock-conversation-api.test.mjs"
   }
 }

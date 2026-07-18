@@ -20,6 +20,8 @@ $identityOpenApi = Get-Content -Raw $identityOpenApiFile | ConvertFrom-Json
 $notificationOpenApi = Get-Content -Raw $notificationOpenApiFile | ConvertFrom-Json
 $modelRegistryOpenApi = Get-Content -Raw $modelRegistryOpenApiFile | ConvertFrom-Json
 $modelRegistryInternalOpenApi = Get-Content -Raw $modelRegistryInternalOpenApiFile | ConvertFrom-Json
+$conversationOpenApi = Get-Content -Raw (Join-Path $projectRoot "contracts/openapi/conversation.openapi.json") | ConvertFrom-Json
+$conversationStreamSchema = Get-Content -Raw (Join-Path $projectRoot "contracts/events/conversation-stream-event.v1.schema.json") | ConvertFrom-Json
 
 if (-not (Test-Path $inferenceEventSchemaFile)) {
     throw "Inference 标准事件 Schema 不存在。"
@@ -28,6 +30,301 @@ $inferenceEventSchema = Get-Content -Raw $inferenceEventSchemaFile | ConvertFrom
 
 if ($openApi.openapi -notmatch "^3\.1\.") {
     throw "公共 OpenAPI 必须使用 3.1.x。"
+}
+
+if ($conversationOpenApi.openapi -notmatch "^3\.1\.") {
+    throw "Conversation OpenAPI 必须使用 3.1.x。"
+}
+
+$requiredConversationPaths = @(
+    "/api/v1/conversations",
+    "/api/v1/conversations/{conversationId}",
+    "/api/v1/conversations/{conversationId}/generations",
+    "/api/v1/generations/{generationId}",
+    "/api/v1/generations/{generationId}/events",
+    "/api/v1/generations/{generationId}/stop",
+    "/api/v1/generations/{generationId}/regenerate"
+)
+foreach ($path in $requiredConversationPaths) {
+    if ($null -eq $conversationOpenApi.paths.$path) {
+        throw "Conversation OpenAPI 缺少必要路径：$path"
+    }
+}
+
+if ($conversationStreamSchema.'$schema' -ne "https://json-schema.org/draft/2020-12/schema") {
+    throw "Conversation SSE Schema 必须使用 JSON Schema Draft 2020-12。"
+}
+
+$conversationOperations = @(
+    @{ Name = "POST /api/v1/conversations"; Operation = $conversationOpenApi.paths."/api/v1/conversations".post; Success = "201" },
+    @{ Name = "GET /api/v1/conversations"; Operation = $conversationOpenApi.paths."/api/v1/conversations".get; Success = "200" },
+    @{ Name = "GET /api/v1/conversations/{conversationId}"; Operation = $conversationOpenApi.paths."/api/v1/conversations/{conversationId}".get; Success = "200" },
+    @{ Name = "DELETE /api/v1/conversations/{conversationId}"; Operation = $conversationOpenApi.paths."/api/v1/conversations/{conversationId}".delete; Success = "204" },
+    @{ Name = "POST /api/v1/conversations/{conversationId}/generations"; Operation = $conversationOpenApi.paths."/api/v1/conversations/{conversationId}/generations".post; Success = "202" },
+    @{ Name = "GET /api/v1/generations/{generationId}"; Operation = $conversationOpenApi.paths."/api/v1/generations/{generationId}".get; Success = "200" },
+    @{ Name = "GET /api/v1/generations/{generationId}/events"; Operation = $conversationOpenApi.paths."/api/v1/generations/{generationId}/events".get; Success = "200" },
+    @{ Name = "POST /api/v1/generations/{generationId}/stop"; Operation = $conversationOpenApi.paths."/api/v1/generations/{generationId}/stop".post; Success = "200" },
+    @{ Name = "POST /api/v1/generations/{generationId}/regenerate"; Operation = $conversationOpenApi.paths."/api/v1/generations/{generationId}/regenerate".post; Success = "202" }
+)
+$validatedConversationErrorResponseRefs = @()
+foreach ($responseProperty in $conversationOpenApi.components.responses.PSObject.Properties) {
+    $response = $responseProperty.Value
+    if ($null -eq $response.headers."X-Correlation-ID") {
+        throw "Conversation OpenAPI 错误响应缺少 X-Correlation-ID：$($responseProperty.Name)"
+    }
+    if ($response.content."application/json".schema.'$ref' -ne "#/components/schemas/ErrorResponse") {
+        throw "Conversation OpenAPI 错误响应未引用 ErrorResponse：$($responseProperty.Name)"
+    }
+    $validatedConversationErrorResponseRefs += "#/components/responses/$($responseProperty.Name)"
+}
+
+foreach ($entry in $conversationOperations) {
+    if ($null -eq $entry.Operation) {
+        throw "Conversation OpenAPI 缺少操作：$($entry.Name)"
+    }
+    $responseStatuses = @($entry.Operation.responses.PSObject.Properties.Name)
+    if ($entry.Success -notin $responseStatuses) {
+        throw "Conversation OpenAPI 操作缺少成功状态 $($entry.Success)：$($entry.Name)"
+    }
+    foreach ($status in @("406", "500")) {
+        if ($status -notin $responseStatuses) {
+            throw "Conversation OpenAPI 操作缺少统一 $status 响应：$($entry.Name)"
+        }
+        $errorResponseRef = $entry.Operation.responses.PSObject.Properties[$status].Value.'$ref'
+        if ($errorResponseRef -notin $validatedConversationErrorResponseRefs) {
+            throw "Conversation OpenAPI 操作 $status 必须引用已验证的公共错误响应：$($entry.Name)"
+        }
+    }
+    if ($null -ne $entry.Operation.requestBody) {
+        if ("415" -notin $responseStatuses) {
+            throw "Conversation OpenAPI 带请求体操作缺少 415：$($entry.Name)"
+        }
+        $unsupportedMediaTypeRef = $entry.Operation.responses.PSObject.Properties["415"].Value.'$ref'
+        if ($unsupportedMediaTypeRef -notin $validatedConversationErrorResponseRefs) {
+            throw "Conversation OpenAPI 操作 415 必须引用已验证的公共错误响应：$($entry.Name)"
+        }
+    }
+    foreach ($operationResponse in $entry.Operation.responses.PSObject.Properties) {
+        if ($operationResponse.Name -eq $entry.Success) {
+            continue
+        }
+        $operationErrorRef = $operationResponse.Value.'$ref'
+        if ($operationErrorRef -notin $validatedConversationErrorResponseRefs) {
+            throw "Conversation OpenAPI 非成功响应必须引用已验证的公共错误响应：$($entry.Name) $($operationResponse.Name)"
+        }
+    }
+    $successResponse = $entry.Operation.responses.PSObject.Properties[$entry.Success].Value
+    if ($null -eq $successResponse.headers."X-Correlation-ID") {
+        throw "Conversation OpenAPI 成功响应缺少 X-Correlation-ID：$($entry.Name)"
+    }
+}
+
+$generationCreateRequest = $conversationOpenApi.components.schemas.GenerationCreateRequest
+$expectedGenerationRequestFields = @("clientRequestId", "content", "modelId")
+$actualGenerationRequestFields = @($generationCreateRequest.required | Sort-Object)
+if (Compare-Object $expectedGenerationRequestFields $actualGenerationRequestFields) {
+    throw "Conversation GenerationCreateRequest 必填字段发生漂移。"
+}
+foreach ($uuidField in @("clientRequestId", "modelId")) {
+    if ($generationCreateRequest.properties.$uuidField.format -ne "uuid") {
+        throw "Conversation GenerationCreateRequest 字段必须使用 UUID：$uuidField"
+    }
+}
+foreach ($schemaName in @("ConversationCreateRequest", "GenerationCreateRequest", "RegenerateRequest", "MessageContent")) {
+    if ($conversationOpenApi.components.schemas.$schemaName.additionalProperties -ne $false) {
+        throw "Conversation 请求 Schema 必须禁止未声明字段：$schemaName"
+    }
+}
+foreach ($blockSchemaName in @("TextContentBlock", "ImageReferenceContentBlock", "FileReferenceContentBlock")) {
+    if ($conversationOpenApi.components.schemas.$blockSchemaName.additionalProperties -ne $false) {
+        throw "Conversation 内容块必须禁止未声明字段：$blockSchemaName"
+    }
+}
+
+$messageContent = $conversationOpenApi.components.schemas.MessageContent
+$expectedMessageContentFields = @("blocks", "schemaVersion")
+if (Compare-Object $expectedMessageContentFields @($messageContent.required | Sort-Object)) {
+    throw "Conversation MessageContent 必填字段必须精确为 schemaVersion 和 blocks。"
+}
+if ($messageContent.properties.schemaVersion.const -ne 1) {
+    throw "Conversation MessageContent schemaVersion 必须固定为 1。"
+}
+$contentBlocks = $messageContent.properties.blocks
+if ($contentBlocks.minItems -ne 1 -or $contentBlocks.maxItems -ne 100 -or $contentBlocks.items.'$ref' -ne "#/components/schemas/ContentBlock") {
+    throw "Conversation MessageContent blocks 必须包含 1 至 100 个 ContentBlock。"
+}
+
+$contentBlock = $conversationOpenApi.components.schemas.ContentBlock
+$expectedContentBlockRefs = @(
+    "#/components/schemas/FileReferenceContentBlock",
+    "#/components/schemas/ImageReferenceContentBlock",
+    "#/components/schemas/TextContentBlock"
+)
+$actualContentBlockRefs = @($contentBlock.oneOf | ForEach-Object { $_.'$ref' } | Sort-Object)
+if ($contentBlock.oneOf.Count -ne 3 -or (Compare-Object $expectedContentBlockRefs $actualContentBlockRefs)) {
+    throw "Conversation ContentBlock 必须精确引用 text、image_ref 和 file_ref 三个分支。"
+}
+
+$contentBlockExpectations = @(
+    @{ Name = "TextContentBlock"; Required = @("text", "type"); Type = "text"; Resource = $false },
+    @{ Name = "ImageReferenceContentBlock"; Required = @("resourceId", "type"); Type = "image_ref"; Resource = $true },
+    @{ Name = "FileReferenceContentBlock"; Required = @("resourceId", "type"); Type = "file_ref"; Resource = $true }
+)
+foreach ($expectation in $contentBlockExpectations) {
+    $blockSchema = $conversationOpenApi.components.schemas.($expectation.Name)
+    if (Compare-Object $expectation.Required @($blockSchema.required | Sort-Object)) {
+        throw "Conversation 内容块必填字段发生漂移：$($expectation.Name)"
+    }
+    if ($blockSchema.properties.type.const -ne $expectation.Type) {
+        throw "Conversation 内容块 type 发生漂移：$($expectation.Name)"
+    }
+    if ($expectation.Resource -and $blockSchema.properties.resourceId.format -ne "uuid") {
+        throw "Conversation 引用内容块 resourceId 必须使用 UUID：$($expectation.Name)"
+    }
+}
+
+$generationAcceptedView = $conversationOpenApi.components.schemas.GenerationAcceptedView
+$expectedGenerationAcceptedFields = @("eventsUrl", "generationId", "statusUrl", "userMessageId")
+if (Compare-Object $expectedGenerationAcceptedFields @($generationAcceptedView.required | Sort-Object)) {
+    throw "Conversation GenerationAcceptedView 必填字段发生漂移。"
+}
+
+foreach ($responseSchemaName in @("ConversationView", "ConversationListView", "ConversationDetailView", "GenerationAcceptedView", "GenerationView", "ErrorResponse")) {
+    if ($conversationOpenApi.components.schemas.$responseSchemaName.additionalProperties -eq $false) {
+        throw "Conversation 响应 Schema 必须允许兼容新增字段：$responseSchemaName"
+    }
+}
+
+$expectedGenerationStatuses = @("FAILED", "INTERRUPTED", "PENDING", "STOPPED", "STREAMING", "SUCCEEDED")
+$actualGenerationStatuses = @($conversationOpenApi.components.schemas.GenerationStatus.enum | Sort-Object)
+if (Compare-Object $expectedGenerationStatuses $actualGenerationStatuses) {
+    throw "Conversation GenerationStatus 集合发生漂移。"
+}
+
+$conversationErrorPattern = "^AW-CONVERSATION-(NOT_FOUND|CONFLICT|VALIDATION|DEPENDENCY|RATE_LIMIT|INTERNAL)-[0-9]{4}$"
+if ($conversationOpenApi.components.schemas.ErrorResponse.properties.code.pattern -ne $conversationErrorPattern) {
+    throw "Conversation ErrorResponse 必须限制为批准的稳定错误类别。"
+}
+
+$conversationSecurityDescription = $conversationOpenApi.components.securitySchemes.ServiceJwt.description
+foreach ($requiredSecurityText in @("conversation\.manage", "conversation\.generate", "actor_user_id")) {
+    if ($conversationSecurityDescription -notmatch $requiredSecurityText) {
+        throw "Conversation Service JWT 缺少安全要求：$requiredSecurityText"
+    }
+}
+
+$sseOperation = $conversationOpenApi.paths."/api/v1/generations/{generationId}/events".get
+$lastEventIdParameter = @($sseOperation.parameters | Where-Object { $_.name -eq "Last-Event-ID" -and $_.in -eq "header" })
+if ($lastEventIdParameter.Count -ne 1 -or $lastEventIdParameter[0].required -ne $false) {
+    throw "Conversation SSE 操作必须声明可选 Last-Event-ID Header。"
+}
+$sseSuccessResponse = $sseOperation.responses."200"
+if ($null -eq $sseSuccessResponse.content."text/event-stream") {
+    throw "Conversation SSE 200 响应必须声明 text/event-stream。"
+}
+$expectedStreamHeaders = @{
+    "Cache-Control" = "no-cache"
+    "X-Accel-Buffering" = "no"
+}
+foreach ($streamHeader in $expectedStreamHeaders.Keys) {
+    if ($null -eq $sseSuccessResponse.headers.$streamHeader) {
+        throw "Conversation SSE 200 响应缺少代理缓冲控制 Header：$streamHeader"
+    }
+    if ($sseSuccessResponse.headers.$streamHeader.schema.const -ne $expectedStreamHeaders[$streamHeader]) {
+        throw "Conversation SSE 200 响应缓冲控制值发生漂移：$streamHeader"
+    }
+}
+
+$conversationEventBranches = @($conversationStreamSchema.oneOf)
+$expectedConversationEventTypes = @(
+    "content.checkpoint",
+    "content.delta",
+    "generation.completed",
+    "generation.failed",
+    "generation.interrupted",
+    "generation.started",
+    "generation.stopped",
+    "reasoning.delta",
+    "replay.reset",
+    "stream.heartbeat",
+    "usage.updated"
+)
+$actualConversationEventTypes = @($conversationEventBranches | ForEach-Object { $_.properties.eventType.const } | Sort-Object)
+if ($conversationEventBranches.Count -ne 11 -or (Compare-Object $expectedConversationEventTypes $actualConversationEventTypes)) {
+    throw "Conversation SSE Schema 必须精确定义 11 个事件。"
+}
+
+$expectedConversationEventFields = @("eventId", "eventType", "generationId", "occurredAt", "payload", "payloadVersion", "sequence")
+foreach ($branch in $conversationEventBranches) {
+    $actualRequiredFields = @($branch.required | Sort-Object)
+    if (Compare-Object $expectedConversationEventFields $actualRequiredFields) {
+        throw "Conversation SSE 事件公共必填字段发生漂移：$($branch.properties.eventType.const)"
+    }
+    if ($branch.additionalProperties -ne $false) {
+        throw "Conversation SSE 事件分支必须禁止未声明字段：$($branch.properties.eventType.const)"
+    }
+    if ($branch.properties.payloadVersion.'$ref' -ne '#/$defs/payloadVersion') {
+        throw "Conversation SSE 事件必须引用固定 payloadVersion：$($branch.properties.eventType.const)"
+    }
+}
+if ($conversationStreamSchema.'$defs'.payloadVersion.const -ne 1) {
+    throw "Conversation SSE payloadVersion 必须固定为 1。"
+}
+
+$eventByType = @{}
+foreach ($branch in $conversationEventBranches) {
+    $eventByType[$branch.properties.eventType.const] = $branch
+}
+foreach ($deltaType in @("content.delta", "reasoning.delta")) {
+    $payload = $eventByType[$deltaType].properties.payload
+    if ("delta" -notin @($payload.required) -or $payload.properties.delta.minLength -ne 1) {
+        throw "Conversation SSE delta 必须为非空必填字段：$deltaType"
+    }
+}
+$checkpointRequired = @($eventByType["content.checkpoint"].properties.payload.required)
+if ("content" -notin $checkpointRequired -or "throughSequence" -notin $checkpointRequired) {
+    throw "Conversation content.checkpoint 缺少完整内容或覆盖序号。"
+}
+$usagePayload = $eventByType["usage.updated"].properties.payload
+$expectedTokenFields = @("completionTokens", "promptTokens", "totalTokens")
+if (Compare-Object $expectedTokenFields @($usagePayload.required | Sort-Object)) {
+    throw "Conversation usage.updated 必须显式提供三个 Token 字段。"
+}
+foreach ($tokenField in $expectedTokenFields) {
+    if ($usagePayload.properties.$tokenField.'$ref' -ne '#/$defs/nullableTokenCount') {
+        throw "Conversation Token 字段必须引用可空非负整数：$tokenField"
+    }
+}
+$nullableTokenBranches = @($conversationStreamSchema.'$defs'.nullableTokenCount.oneOf)
+$integerTokenBranch = $nullableTokenBranches | Where-Object { $_.type -eq "integer" }
+$nullTokenBranch = $nullableTokenBranches | Where-Object { $_.type -eq "null" }
+if ($nullableTokenBranches.Count -ne 2 -or $integerTokenBranch.minimum -ne 0 -or $null -eq $nullTokenBranch) {
+    throw "Conversation Token 计数必须接受非负整数或 null。"
+}
+
+$terminalStatuses = @{
+    "generation.completed" = "SUCCEEDED"
+    "generation.failed" = "FAILED"
+    "generation.stopped" = "STOPPED"
+    "generation.interrupted" = "INTERRUPTED"
+}
+foreach ($terminalType in $terminalStatuses.Keys) {
+    $payload = $eventByType[$terminalType].properties.payload
+    if ("status" -notin @($payload.required) -or $payload.properties.status.const -ne $terminalStatuses[$terminalType]) {
+        throw "Conversation 终态事件 status 发生漂移：$terminalType"
+    }
+}
+foreach ($errorTerminalType in @("generation.failed", "generation.interrupted")) {
+    $requiredPayloadFields = @($eventByType[$errorTerminalType].properties.payload.required)
+    if ("code" -notin $requiredPayloadFields -or "correlationId" -notin $requiredPayloadFields) {
+        throw "Conversation 错误终态缺少错误码或关联 ID：$errorTerminalType"
+    }
+}
+if ("snapshotUrl" -notin @($eventByType["replay.reset"].properties.payload.required)) {
+    throw "Conversation replay.reset 缺少 snapshotUrl。"
+}
+if ($conversationStreamSchema.'$defs'.errorCode.pattern -ne $conversationErrorPattern) {
+    throw "Conversation SSE 错误码必须限制为批准的稳定错误类别。"
 }
 
 if ($null -eq $openApi.paths -or $null -eq $openApi.components.headers.CorrelationId) {
