@@ -1,8 +1,17 @@
 package io.github.yanhuo218.autumnwind.inference.transport;
 
+import io.github.yanhuo218.autumnwind.inference.chat.ChatInferenceCommand;
+import io.github.yanhuo218.autumnwind.inference.chat.InferenceEvent;
+import io.github.yanhuo218.autumnwind.inference.chat.OpenAiChatCompletionsAdapter;
+import io.github.yanhuo218.autumnwind.inference.credentials.EndpointCredentialResolver;
+import io.github.yanhuo218.autumnwind.inference.registry.InferenceTarget;
 import io.github.yanhuo218.autumnwind.inference.security.OutboundTargetPolicy;
 import io.github.yanhuo218.autumnwind.inference.security.PublicAddressPolicy;
+import io.github.yanhuo218.autumnwind.inference.security.TargetPolicyException;
 import io.github.yanhuo218.autumnwind.inference.security.ValidatedTarget;
+import io.github.yanhuo218.autumnwind.security.secrets.EncryptedSecret;
+import io.github.yanhuo218.autumnwind.security.secrets.SecretContext;
+import io.github.yanhuo218.autumnwind.security.secrets.SecretStore;
 import io.netty.buffer.UnpooledByteBufAllocator;
 import io.netty.handler.ssl.SslHandler;
 import org.junit.jupiter.api.Test;
@@ -11,6 +20,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.netty.tcp.SslProvider;
+import tools.jackson.databind.ObjectMapper;
 
 import java.net.InetAddress;
 import java.net.URI;
@@ -22,11 +32,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.net.ssl.SNIHostName;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -85,6 +99,57 @@ class RedirectPolicyTest {
         assertEquals(List.of(ipv4(11, 0, 0, 2)), attempt.targets.get(1).addresses());
         assertSame(request, attempt.requests.get(0));
         assertSame(request, attempt.requests.get(1));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {307, 308})
+    void 重定向到私网时Adapter输出目标拒绝且不重试并清零凭据(int redirectStatus) throws Exception {
+        AtomicInteger dnsCount = new AtomicInteger();
+        AtomicInteger attemptCount = new AtomicInteger();
+        List<byte[]> plaintexts = new ArrayList<>();
+        OutboundTargetPolicy policy = new OutboundTargetPolicy(host -> {
+            int sequence = dnsCount.incrementAndGet();
+            return List.of(sequence % 2 == 1 ? ipv4(11, 0, 0, 1) : ipv4(10, 0, 0, 1));
+        }, new PublicAddressPolicy());
+        ReactorNettyProviderExchangeClient.HttpAttempt attempt = (target, request, handler) -> {
+            attemptCount.incrementAndGet();
+            return Flux.from(handler.handle(
+                    redirectStatus,
+                    "/private-location-placeholder",
+                    Flux.never()));
+        };
+        SecretStore secretStore = new SecretStore() {
+            @Override
+            public EncryptedSecret encrypt(byte[] plaintext, SecretContext context) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public byte[] decrypt(EncryptedSecret encryptedSecret, SecretContext context) {
+                byte[] plaintext = "PLACEHOLDER_API_KEY_NOT_FOR_REAL_USE"
+                        .getBytes(StandardCharsets.US_ASCII);
+                plaintexts.add(plaintext);
+                return plaintext;
+            }
+        };
+        OpenAiChatCompletionsAdapter adapter = new OpenAiChatCompletionsAdapter(
+                new ObjectMapper(),
+                policy,
+                new EndpointCredentialResolver(secretStore),
+                new ReactorNettyProviderExchangeClient(policy, attempt));
+
+        List<InferenceEvent> events = adapter.infer(command(), target()).collectList()
+                .block(Duration.ofSeconds(2));
+
+        assertEquals(1, events.size());
+        InferenceEvent.Error error = assertInstanceOf(InferenceEvent.Error.class, events.getFirst());
+        assertEquals(InferenceEvent.ErrorCode.TARGET_REJECTED, error.code());
+        assertFalse(error.retryable());
+        assertEquals(1, attemptCount.get());
+        assertEquals(2, dnsCount.get());
+        assertEquals(1, plaintexts.size());
+        assertTrue(plaintexts.stream().allMatch(RedirectPolicyTest::allZero));
+        assertFalse(events.toString().contains("private-location-placeholder"));
     }
 
     @ParameterizedTest
@@ -187,9 +252,50 @@ class RedirectPolicyTest {
     }
 
     private static void assertRejected(Flux<ProviderFrame> exchange) {
-        RuntimeException error = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+        TargetPolicyException error = org.junit.jupiter.api.Assertions.assertThrows(TargetPolicyException.class,
                 exchange::blockLast);
         assertEquals("服务商重定向被拒绝。", error.getMessage());
+        assertNull(error.getCause());
+        assertEquals(TargetPolicyException.class.getName() + ": 服务商重定向被拒绝。", error.toString());
+    }
+
+    private static ChatInferenceCommand command() {
+        return new ChatInferenceCommand(
+                UUID.fromString("f7590cc5-1e56-4a28-ac97-e58380a6d94e"),
+                UUID.fromString("b88e1f00-83dc-4cf0-a7b3-000000000001"),
+                List.of(new ChatInferenceCommand.Message("user", "请求文本占位符")),
+                null,
+                null,
+                null,
+                true,
+                "correlation-placeholder-redirect");
+    }
+
+    private static InferenceTarget target() {
+        return new InferenceTarget(
+                UUID.fromString("f7590cc5-1e56-4a28-ac97-e58380a6d94e"),
+                UUID.fromString("b88e1f00-83dc-4cf0-a7b3-000000000001"),
+                "provider-model-placeholder",
+                1,
+                UUID.fromString("2d3b1f8a-0ed4-4c3e-a2ab-d1a7580c2201"),
+                URI.create("https://provider.invalid/v1"),
+                "OPENAI_COMPATIBLE",
+                30,
+                2,
+                new InferenceTarget.Capabilities(
+                        "CHAT_COMPLETIONS", Set.of("TEXT"), "TEXT", true, true, true, 8192, 1024),
+                UUID.fromString("a24a3063-1e16-49dd-b1a8-6edb9d477810"),
+                new EncryptedSecret(1, "key-id-placeholder", new byte[12], new byte[48],
+                        new byte[12], new byte[16]));
+    }
+
+    private static boolean allZero(byte[] value) {
+        for (byte element : value) {
+            if (element != 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static ProviderRequest request() {

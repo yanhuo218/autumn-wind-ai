@@ -13,6 +13,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -86,6 +88,10 @@ class ReactorNettyHttpAttemptTest {
                         request.withConnection(connection -> connection.dispose());
                         return Mono.never();
                     }
+                    if (request.uri().startsWith("/empty-")) {
+                        int status = Integer.parseInt(request.uri().substring("/empty-".length()));
+                        return response.status(status).send();
+                    }
                     return response.sendString(Mono.just("response-placeholder"));
                 })
                 .bindNow(Duration.ofSeconds(5));
@@ -112,11 +118,24 @@ class ReactorNettyHttpAttemptTest {
 
         List<ProviderFrame> frames = exchange("/ok").collectList().block(Duration.ofSeconds(5));
 
+        assertEquals(1, frames.size());
         assertEquals("response-placeholder", body(frames));
         assertEquals(connectionsBefore + 1, CONNECTION_COUNT.get());
         assertEquals(requestsBefore + 1, REQUEST_COUNT.get());
         assertEquals(PROVIDER_HOST, SNI_HOSTS.getLast());
         assertEquals(AUTHORIZATION_PLACEHOLDER, AUTHORIZATIONS.getLast());
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {200, 401, 429})
+    void 空正文仍产生一个包含状态的空数据帧(int status) {
+        List<ProviderFrame> frames = exchange("/empty-" + status)
+                .collectList()
+                .block(Duration.ofSeconds(5));
+
+        assertEquals(1, frames.size());
+        assertEquals(status, frames.getFirst().status());
+        assertEquals(0, frames.getFirst().data().length);
     }
 
     @Test

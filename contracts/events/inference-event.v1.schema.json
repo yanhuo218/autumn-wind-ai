@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:autumn-wind-ai:events:inference-event:v1",
+  "title": "Inference 标准事件 V1",
+  "description": "Inference Gateway 内部文本推理适配器输出的标准事件。",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "attemptId"],
+      "properties": {
+        "type": { "const": "start" },
+        "attemptId": { "type": "string", "format": "uuid" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "delta"],
+      "properties": {
+        "type": { "const": "reasoning" },
+        "delta": { "type": "string", "minLength": 1 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "delta"],
+      "properties": {
+        "type": { "const": "text_delta" },
+        "delta": { "type": "string", "minLength": 1 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "promptTokens", "completionTokens", "totalTokens"],
+      "properties": {
+        "type": { "const": "usage" },
+        "promptTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "completionTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "totalTokens": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "code", "correlationId", "retryable"],
+      "properties": {
+        "type": { "const": "error" },
+        "code": {
+          "type": "string",
+          "enum": [
+            "TARGET_REJECTED",
+            "PROVIDER_AUTHENTICATION_FAILED",
+            "PROVIDER_RATE_LIMITED",
+            "PROVIDER_UNAVAILABLE",
+            "PROVIDER_RESPONSE_INVALID",
+            "PROVIDER_ERROR",
+            "CONNECTION_FAILED",
+            "INTERNAL_DEPENDENCY_ERROR"
+          ]
+        },
+        "correlationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "retryable": { "type": "boolean" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "finishReason"],
+      "properties": {
+        "type": { "const": "done" },
+        "finishReason": { "type": ["string", "null"], "maxLength": 128 }
+      }
+    }
+  ]
+}

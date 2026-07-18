@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $openApiFile = Join-Path $projectRoot "contracts/openapi/common.openapi.json"
 $eventSchemaFile = Join-Path $projectRoot "contracts/events/event-envelope.v1.schema.json"
+$inferenceEventSchemaFile = Join-Path $projectRoot "contracts/events/inference-event.v1.schema.json"
 $identityOpenApiFile = Join-Path $projectRoot "contracts/openapi/identity.openapi.json"
 $notificationOpenApiFile = Join-Path $projectRoot "contracts/openapi/notification.openapi.json"
 $modelRegistryOpenApiFile = Join-Path $projectRoot "contracts/openapi/model-registry.openapi.json"
@@ -19,6 +20,11 @@ $identityOpenApi = Get-Content -Raw $identityOpenApiFile | ConvertFrom-Json
 $notificationOpenApi = Get-Content -Raw $notificationOpenApiFile | ConvertFrom-Json
 $modelRegistryOpenApi = Get-Content -Raw $modelRegistryOpenApiFile | ConvertFrom-Json
 $modelRegistryInternalOpenApi = Get-Content -Raw $modelRegistryInternalOpenApiFile | ConvertFrom-Json
+
+if (-not (Test-Path $inferenceEventSchemaFile)) {
+    throw "Inference 标准事件 Schema 不存在。"
+}
+$inferenceEventSchema = Get-Content -Raw $inferenceEventSchemaFile | ConvertFrom-Json
 
 if ($openApi.openapi -notmatch "^3\.1\.") {
     throw "公共 OpenAPI 必须使用 3.1.x。"
@@ -51,6 +57,39 @@ if ($eventSchema.'$schema' -ne "https://json-schema.org/draft/2020-12/schema") {
 
 if ($eventSchema.additionalProperties -ne $true) {
     throw "事件 Envelope 必须允许兼容新增字段。"
+}
+
+if ($inferenceEventSchema.'$schema' -ne "https://json-schema.org/draft/2020-12/schema") {
+    throw "Inference 标准事件必须使用 JSON Schema Draft 2020-12。"
+}
+$inferenceEventBranches = @($inferenceEventSchema.oneOf)
+if ($inferenceEventBranches.Count -ne 6) {
+    throw "Inference 标准事件必须精确定义六种事件。"
+}
+$expectedInferenceEventTypes = @("done", "error", "reasoning", "start", "text_delta", "usage")
+$actualInferenceEventTypes = @($inferenceEventBranches | ForEach-Object { $_.properties.type.const } | Sort-Object)
+if (Compare-Object $expectedInferenceEventTypes $actualInferenceEventTypes) {
+    throw "Inference 标准事件 type 集合发生漂移。"
+}
+foreach ($branch in $inferenceEventBranches) {
+    if ($branch.additionalProperties -ne $false) {
+        throw "Inference 标准事件各分支必须禁止未声明字段。"
+    }
+}
+$errorBranch = $inferenceEventBranches | Where-Object { $_.properties.type.const -eq "error" }
+$expectedInferenceErrorCodes = @(
+    "CONNECTION_FAILED",
+    "INTERNAL_DEPENDENCY_ERROR",
+    "PROVIDER_AUTHENTICATION_FAILED",
+    "PROVIDER_ERROR",
+    "PROVIDER_RATE_LIMITED",
+    "PROVIDER_RESPONSE_INVALID",
+    "PROVIDER_UNAVAILABLE",
+    "TARGET_REJECTED"
+)
+$actualInferenceErrorCodes = @($errorBranch.properties.code.enum | Sort-Object)
+if (Compare-Object $expectedInferenceErrorCodes $actualInferenceErrorCodes) {
+    throw "Inference 标准事件错误码集合发生漂移。"
 }
 
 $requiredEventFields = @($eventSchema.required)

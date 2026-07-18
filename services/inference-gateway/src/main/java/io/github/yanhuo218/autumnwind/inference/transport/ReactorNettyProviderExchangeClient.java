@@ -1,6 +1,7 @@
 package io.github.yanhuo218.autumnwind.inference.transport;
 
 import io.github.yanhuo218.autumnwind.inference.security.OutboundTargetPolicy;
+import io.github.yanhuo218.autumnwind.inference.security.TargetPolicyException;
 import io.github.yanhuo218.autumnwind.inference.security.ValidatedTarget;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.http.HttpHeaderNames;
@@ -48,6 +49,7 @@ public final class ReactorNettyProviderExchangeClient implements ProviderExchang
         Objects.requireNonNull(request, "服务商请求不能为空。");
         return exchangeAttempt(target, request, 0)
                 .onErrorMap(error -> error instanceof ProviderExchangeException
+                        || error instanceof TargetPolicyException
                         ? error
                         : new ProviderExchangeException(EXCHANGE_FAILED_MESSAGE));
     }
@@ -87,7 +89,9 @@ public final class ReactorNettyProviderExchangeClient implements ProviderExchang
         }
         Flux<ProviderFrame> redirectedExchange = Mono.fromCallable(() -> targetPolicy.validate(redirectUri))
                 .subscribeOn(Schedulers.boundedElastic())
-                .onErrorMap(error -> new ProviderExchangeException(REDIRECT_REJECTED_MESSAGE))
+                .onErrorMap(error -> error instanceof TargetPolicyException
+                        ? error
+                        : new ProviderExchangeException(EXCHANGE_FAILED_MESSAGE))
                 .flatMapMany(redirectedTarget -> sameOrigin(target.uri(), redirectedTarget.uri())
                         ? exchangeAttempt(redirectedTarget, request, redirectCount + 1)
                         : rejectedRedirect());
@@ -116,7 +120,7 @@ public final class ReactorNettyProviderExchangeClient implements ProviderExchang
     }
 
     private static Flux<ProviderFrame> rejectedRedirect() {
-        return Flux.error(new ProviderExchangeException(REDIRECT_REJECTED_MESSAGE));
+        return Flux.error(new TargetPolicyException(REDIRECT_REJECTED_MESSAGE));
     }
 
     private static Flux<ProviderFrame> terminateRedirectBody(
@@ -204,10 +208,11 @@ public final class ReactorNettyProviderExchangeClient implements ProviderExchang
                                 int status = response.status().code();
                                 String location = response.responseHeaders().get(HttpHeaderNames.LOCATION);
                                 Flux<ProviderFrame> body = content.map(buffer -> {
-                                    byte[] data = new byte[buffer.readableBytes()];
-                                    buffer.readBytes(data);
-                                    return new ProviderFrame(status, data);
-                                });
+                                            byte[] data = new byte[buffer.readableBytes()];
+                                            buffer.readBytes(data);
+                                            return new ProviderFrame(status, data);
+                                        })
+                                        .switchIfEmpty(Flux.just(new ProviderFrame(status, new byte[0])));
                                 return handler.handle(status, location, body);
                             }),
                     PinnedAddressResolverGroup::close
