@@ -1,0 +1,66 @@
+SET search_path TO model_registry;
+
+INSERT INTO endpoints (
+    id, owner_user_id, display_name, base_url, protocol, request_timeout_seconds,
+    enabled, current_credential_id, last_test_status, last_tested_at, version, created_at, updated_at
+) VALUES (
+    '10000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000002',
+    '迁移测试端点',
+    'https://invalid.example/v1',
+    'OPENAI_COMPATIBLE',
+    30,
+    TRUE,
+    NULL,
+    'NEVER',
+    NULL,
+    0,
+    '2026-07-18T00:00:00Z',
+    '2026-07-18T00:00:00Z'
+);
+
+INSERT INTO endpoint_credentials (
+    id, endpoint_id, secret_version, key_id, wrapped_data_key_nonce,
+    wrapped_data_key, payload_nonce, ciphertext, created_at, replaced_at
+) VALUES (
+    '10000000-0000-0000-0000-000000000003',
+    '10000000-0000-0000-0000-000000000001',
+    1,
+    'fixture-key',
+    decode(repeat('00', 12), 'hex'),
+    decode(repeat('00', 48), 'hex'),
+    decode(repeat('00', 12), 'hex'),
+    decode(repeat('00', 32), 'hex'),
+    '2026-07-18T00:00:00Z',
+    NULL
+);
+
+UPDATE endpoints
+SET current_credential_id = '10000000-0000-0000-0000-000000000003'
+WHERE id = '10000000-0000-0000-0000-000000000001';
+
+INSERT INTO endpoint_connection_test_jobs (
+    id, owner_user_id, endpoint_id, endpoint_version, credential_id,
+    requested_by_user_id, correlation_id, status, failure_code,
+    created_at, started_at, completed_at, version
+) VALUES
+    ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002',
+     '10000000-0000-0000-0000-000000000001', 0, '10000000-0000-0000-0000-000000000003',
+     '10000000-0000-0000-0000-000000000002', 'TASK5FIXTUREQUEUED', 'QUEUED', NULL,
+     '2026-07-18T00:01:00Z', NULL, NULL, 0),
+    ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002',
+     '10000000-0000-0000-0000-000000000001', 0, '10000000-0000-0000-0000-000000000003',
+     '10000000-0000-0000-0000-000000000002', 'TASK5FIXTURERUNNING', 'RUNNING', NULL,
+     '2026-07-18T00:02:00Z', '2026-07-18T00:03:00Z', NULL, 4),
+    ('20000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000002',
+     '10000000-0000-0000-0000-000000000001', 0, '10000000-0000-0000-0000-000000000003',
+     '10000000-0000-0000-0000-000000000002', 'TASK5FIXTURESUCCESS', 'SUCCEEDED', NULL,
+     '2026-07-18T00:04:00Z', '2026-07-18T00:05:00Z', '2026-07-18T00:06:00Z', 2),
+    ('20000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000002',
+     '10000000-0000-0000-0000-000000000001', 0, '10000000-0000-0000-0000-000000000003',
+     '10000000-0000-0000-0000-000000000002', 'TASK5FIXTUREFAILED', 'FAILED', 'LEGACY_FAILURE',
+     '2026-07-18T00:07:00Z', '2026-07-18T00:08:00Z', '2026-07-18T00:09:00Z', 3),
+    ('20000000-0000-0000-0000-000000000005', '10000000-0000-0000-0000-000000000002',
+     '10000000-0000-0000-0000-000000000001', 0, '10000000-0000-0000-0000-000000000003',
+     '10000000-0000-0000-0000-000000000002', 'TASK5FIXTURECANCEL', 'CANCELLED', NULL,
+     '2026-07-18T00:10:00Z', NULL, '2026-07-18T00:11:00Z', 1);

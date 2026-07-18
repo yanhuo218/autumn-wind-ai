@@ -1,0 +1,13 @@
+package io.github.yanhuo218.autumnwind.modelregistry.application.endpoint;
+
+public enum ConnectionTestFailureCode {
+    CONFIGURATION_CHANGED,
+    TARGET_REJECTED,
+    PROVIDER_AUTHENTICATION_FAILED,
+    PROVIDER_RATE_LIMITED,
+    PROVIDER_UNAVAILABLE,
+    PROVIDER_RESPONSE_INVALID,
+    PROVIDER_ERROR,
+    CONNECTION_FAILED,
+    INTERNAL_DEPENDENCY_ERROR
+}

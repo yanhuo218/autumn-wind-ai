@@ -32,6 +32,8 @@ public class ModelRegistrySecurityConfiguration {
     private static final String ENDPOINT_MANAGE_AUTHORITY = "SCOPE_model-registry.endpoint.manage";
     private static final String MODEL_MANAGE_AUTHORITY = "SCOPE_model-registry.model.manage";
     private static final String INFERENCE_RESOLVE_AUTHORITY = "SCOPE_model-registry.inference.resolve";
+    private static final String CONNECTION_TEST_EXECUTE_AUTHORITY =
+            "SCOPE_model-registry.connection-test.execute";
 
     @Bean
     JwtDecoder modelRegistryServiceJwtDecoder(ServiceJwtProperties properties, Clock clock) {
@@ -63,6 +65,10 @@ public class ModelRegistrySecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/internal/v1/model-registry/inference-target-resolutions")
                         .access((authentication, context) -> new AuthorizationDecision(
                                 mayResolveInferenceTarget(authentication.get())))
+                        .requestMatchers(HttpMethod.POST,
+                                "/internal/v1/model-registry/connection-test-jobs/**")
+                        .access((authentication, context) -> new AuthorizationDecision(
+                                mayExecuteConnectionTest(authentication.get())))
                         .requestMatchers(HttpMethod.GET, "/api/v1/model-registry/endpoints",
                                 "/api/v1/model-registry/endpoints/**")
                         .access((authentication, context) -> new AuthorizationDecision(
@@ -113,9 +119,12 @@ public class ModelRegistrySecurityConfiguration {
         return mayManage(authentication, INFERENCE_RESOLVE_AUTHORITY);
     }
 
+    private static boolean mayExecuteConnectionTest(Authentication authentication) {
+        return hasAuthority(authentication, CONNECTION_TEST_EXECUTE_AUTHORITY);
+    }
+
     private static boolean mayManage(Authentication authentication, String requiredAuthority) {
-        if (authentication == null || authentication.getAuthorities().stream()
-                .noneMatch(authority -> requiredAuthority.equals(authority.getAuthority()))) {
+        if (!hasAuthority(authentication, requiredAuthority)) {
             return false;
         }
         if (!(authentication instanceof JwtAuthenticationToken jwtAuthentication)) {
@@ -131,5 +140,10 @@ public class ModelRegistrySecurityConfiguration {
         } catch (IllegalArgumentException ignored) {
             return false;
         }
+    }
+
+    private static boolean hasAuthority(Authentication authentication, String requiredAuthority) {
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> requiredAuthority.equals(authority.getAuthority()));
     }
 }

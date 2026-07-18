@@ -42,6 +42,120 @@
           "500": { "$ref": "#/components/responses/InternalServerError" }
         }
       }
+    },
+    "/internal/v1/model-registry/connection-test-jobs/claims": {
+      "post": {
+        "operationId": "claimEndpointConnectionTestJob",
+        "description": "领取最旧的等待任务或租约已过期的运行任务；没有可领取任务时返回 204。",
+        "responses": {
+          "200": {
+            "description": "连接测试任务固定租约快照。",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConnectionTestJobLeaseView" }
+              }
+            }
+          },
+          "204": { "description": "当前没有可领取任务。" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/internal/v1/model-registry/connection-test-jobs/lease-renewals": {
+      "post": {
+        "operationId": "renewEndpointConnectionTestJobLease",
+        "description": "使用当前租约和任务版本续租。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ConnectionTestLeaseCommand" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "续租后的任务版本。",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConnectionTestJobVersionView" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": { "$ref": "#/components/responses/LeaseConflict" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/internal/v1/model-registry/connection-test-jobs/successes": {
+      "post": {
+        "operationId": "completeEndpointConnectionTestJobSuccessfully",
+        "description": "使用当前租约和任务版本将任务完成为成功。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ConnectionTestLeaseCommand" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功完成后的任务版本。",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConnectionTestJobVersionView" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": { "$ref": "#/components/responses/LeaseConflict" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
+    },
+    "/internal/v1/model-registry/connection-test-jobs/failures": {
+      "post": {
+        "operationId": "completeEndpointConnectionTestJobWithFailure",
+        "description": "使用当前租约和任务版本将任务完成为稳定失败码。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ConnectionTestFailureCommand" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "失败完成后的任务版本。",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ConnectionTestJobVersionView" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "409": { "$ref": "#/components/responses/LeaseConflict" },
+          "406": { "$ref": "#/components/responses/NotAcceptable" },
+          "415": { "$ref": "#/components/responses/UnsupportedMediaType" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        }
+      }
     }
   },
   "components": {
@@ -50,10 +164,60 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "Service JWT 必须包含规范 actor_user_id，并提供 model-registry.inference.resolve scope。"
+        "description": "Service JWT 必须提供对应操作所需的 model-registry.inference.resolve 或 model-registry.connection-test.execute scope；推理目标解析还必须包含规范 actor_user_id，后台连接测试操作不要求用户 actor。"
       }
     },
     "schemas": {
+      "ConnectionTestJobLeaseView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["jobId", "ownerUserId", "endpointId", "endpointVersion", "credentialId", "correlationId", "leaseId", "leaseExpiresAt", "attemptCount", "jobVersion"],
+        "properties": {
+          "jobId": { "type": "string", "format": "uuid" },
+          "ownerUserId": { "type": "string", "format": "uuid" },
+          "endpointId": { "type": "string", "format": "uuid" },
+          "endpointVersion": { "type": "integer", "format": "int64", "minimum": 0 },
+          "credentialId": { "type": "string", "format": "uuid" },
+          "correlationId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{16,64}$" },
+          "leaseId": { "type": "string", "format": "uuid" },
+          "leaseExpiresAt": { "type": "string", "format": "date-time" },
+          "attemptCount": { "type": "integer", "minimum": 1 },
+          "jobVersion": { "type": "integer", "format": "int64", "minimum": 0 }
+        }
+      },
+      "ConnectionTestLeaseCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["jobId", "leaseId", "jobVersion"],
+        "properties": {
+          "jobId": { "type": "string", "format": "uuid" },
+          "leaseId": { "type": "string", "format": "uuid" },
+          "jobVersion": { "type": "integer", "format": "int64", "minimum": 0 }
+        }
+      },
+      "ConnectionTestFailureCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["jobId", "leaseId", "jobVersion", "failureCode"],
+        "properties": {
+          "jobId": { "type": "string", "format": "uuid" },
+          "leaseId": { "type": "string", "format": "uuid" },
+          "jobVersion": { "type": "integer", "format": "int64", "minimum": 0 },
+          "failureCode": {
+            "type": "string",
+            "enum": ["CONFIGURATION_CHANGED", "TARGET_REJECTED", "PROVIDER_AUTHENTICATION_FAILED", "PROVIDER_RATE_LIMITED", "PROVIDER_UNAVAILABLE", "PROVIDER_RESPONSE_INVALID", "PROVIDER_ERROR", "CONNECTION_FAILED", "INTERNAL_DEPENDENCY_ERROR"]
+          }
+        }
+      },
+      "ConnectionTestJobVersionView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["jobId", "jobVersion"],
+        "properties": {
+          "jobId": { "type": "string", "format": "uuid" },
+          "jobVersion": { "type": "integer", "format": "int64", "minimum": 0 }
+        }
+      },
       "InferenceTargetResolutionRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -128,6 +292,7 @@
       "Forbidden": { "$ref": "#/components/responses/Error403" },
       "NotFound": { "$ref": "#/components/responses/Error404" },
       "Conflict": { "$ref": "#/components/responses/Error409" },
+      "LeaseConflict": { "description": "任务租约、版本或运行状态不匹配。", "headers": { "X-Correlation-ID": { "$ref": "#/components/headers/CorrelationId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
       "NotAcceptable": { "$ref": "#/components/responses/Error406" },
       "UnsupportedMediaType": { "$ref": "#/components/responses/Error415" },
       "InternalServerError": { "$ref": "#/components/responses/Error500" },
