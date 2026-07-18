@@ -472,11 +472,11 @@ feat: 实现前端会话客户端与流状态
 - `AppShell` 提供稳定的 sidebar/header/message/composer 四区，不管理业务数据。
 - `GenerationStateRail` 接受六状态与 `SYNCING`，负责可视状态、`aria-busy` 和 polite/atomic 生命周期播报。
 
-- [ ] **Step 1：先写语义与稳定尺寸红灯测试**
+- [x] **Step 1：先写语义与稳定尺寸红灯测试**
 
 断言无 label 时 TypeScript 不通过；运行时检查按钮可访问名称、Tooltip 内容、状态轨 `role=status`、`aria-live=polite`、`aria-atomic=true` 和 `aria-busy`。
 
-- [ ] **Step 2：实现视觉 Token**
+- [x] **Step 2：实现视觉 Token**
 
 `styles.css` 必须使用规格中的固定值：
 
@@ -496,15 +496,15 @@ feat: 实现前端会话客户端与流状态
 
 禁止渐变、装饰光斑、负字间距、视口字体缩放和超过 `8px` 的卡片圆角。
 
-- [ ] **Step 3：实现响应式 AppShell**
+- [x] **Step 3：实现响应式 AppShell**
 
 `>=1024px` 固定 `256px` 侧栏和 `56px` 顶栏；`<1024px` 使用 Radix Dialog 全高抽屉和 `64px` 双行顶栏。消息列 `max-width:780px`，输入区 `max-width:820px`。所有固定控件使用明确宽高与 `min-width:0`。
 
-- [ ] **Step 4：实现状态轨**
+- [x] **Step 4：实现状态轨**
 
 状态映射使用 pine/ink/muted/amber/rust 和 Lucide 图标；`content.delta` 不更新 live region 文案。`prefers-reduced-motion` 禁用流式轨动画。
 
-- [ ] **Step 5：运行 Task 4 验证并提交**
+- [x] **Step 5：运行 Task 4 验证并提交**
 
 ```powershell
 pnpm --filter @autumn-wind/user-web test

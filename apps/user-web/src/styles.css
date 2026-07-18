@@ -1,0 +1,366 @@
+:root {
+  --aw-canvas: #f6f8f7;
+  --aw-surface: #ffffff;
+  --aw-ink: #18211e;
+  --aw-muted: #66736e;
+  --aw-line: #d9e0dd;
+  --aw-pine: #167a68;
+  --aw-rust: #b54a3a;
+  --aw-amber: #8a570f;
+  --aw-radius: 6px;
+  font-family: "Segoe UI Variable", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+  color: var(--aw-ink);
+  background: var(--aw-canvas);
+  letter-spacing: 0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--aw-canvas);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+button,
+textarea,
+input {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+button:focus-visible,
+textarea:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--aw-pine);
+  outline-offset: 2px;
+}
+
+.aw-icon-button {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.aw-icon-button:hover {
+  background: var(--aw-line);
+}
+
+.aw-icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.aw-app-shell {
+  display: grid;
+  grid-template-columns: 256px minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--aw-canvas);
+}
+
+.aw-shell-sidebar {
+  display: flex;
+  min-width: 0;
+  min-height: 100vh;
+  flex-direction: column;
+  border-right: 1px solid var(--aw-line);
+  background: var(--aw-canvas);
+}
+
+.aw-shell-main {
+  display: grid;
+  grid-template-rows: 56px minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 100vh;
+}
+
+.aw-shell-header {
+  display: flex;
+  min-width: 0;
+  height: 56px;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--aw-line);
+  background: var(--aw-surface);
+  padding: 0 20px;
+}
+
+.aw-shell-header-content {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+}
+
+.aw-shell-mobile-header {
+  display: none;
+}
+
+.aw-shell-mobile-account {
+  display: none;
+}
+
+.aw-shell-mobile-trigger {
+  display: none;
+  flex: 0 0 auto;
+}
+
+.aw-shell-messages {
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--aw-surface);
+}
+
+.aw-shell-messages-inner {
+  width: min(100%, 780px);
+  min-width: 0;
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.aw-shell-composer {
+  min-width: 0;
+  border-top: 1px solid var(--aw-line);
+  background: var(--aw-surface);
+  padding: 12px 20px 20px;
+}
+
+.aw-shell-composer-inner {
+  width: min(100%, 820px);
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.aw-mobile-sidebar-content {
+  display: flex;
+  width: min(86vw, 320px);
+  min-height: 100%;
+  flex-direction: column;
+  background: var(--aw-canvas);
+  padding: 16px;
+}
+
+.aw-mobile-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(24, 33, 30, 0.32);
+}
+
+.aw-mobile-sidebar-dialog {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: min(86vw, 320px);
+  max-width: 100vw;
+  min-height: 100%;
+  border: 0;
+  border-right: 1px solid var(--aw-line);
+  background: var(--aw-canvas);
+  box-shadow: 0 12px 32px rgba(24, 33, 30, 0.12);
+  padding: 0;
+}
+
+.aw-mobile-sidebar-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+}
+
+.aw-state-rail {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  border-left: 3px solid var(--aw-muted);
+  color: var(--aw-muted);
+  padding: 2px 0 2px 10px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.aw-state-rail--pending,
+.aw-state-rail--stopped {
+  border-left-color: var(--aw-muted);
+}
+
+.aw-state-rail--streaming {
+  border-left-color: var(--aw-pine);
+  color: var(--aw-pine);
+}
+
+.aw-state-rail__marker {
+  display: none;
+}
+
+.aw-state-rail--streaming .aw-state-rail__marker {
+  position: absolute;
+  top: 0;
+  left: -3px;
+  display: block;
+  width: 3px;
+  height: 10px;
+  background: var(--aw-pine);
+  animation: aw-rail-marker-drift 2.4s ease-in-out infinite alternate;
+}
+
+.aw-state-rail--succeeded {
+  border-left-width: 2px;
+  border-left-color: var(--aw-ink);
+  color: var(--aw-ink);
+}
+
+.aw-state-rail--interrupted,
+.aw-state-rail--syncing {
+  border-left-color: var(--aw-amber);
+  color: var(--aw-amber);
+}
+
+.aw-state-rail--failed {
+  border-left-color: var(--aw-rust);
+  color: var(--aw-rust);
+}
+
+.aw-state-rail__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.aw-state-rail__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aw-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes aw-rail-marker-drift {
+  from {
+    top: 0;
+  }
+
+  to {
+    top: calc(100% - 10px);
+  }
+}
+
+@media (pointer: coarse), (max-width: 1023px) {
+  .aw-icon-button {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    flex-basis: 40px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .aw-app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .aw-shell-sidebar {
+    display: none;
+  }
+
+  .aw-shell-main {
+    grid-template-rows: 64px minmax(0, 1fr) auto;
+  }
+
+  .aw-shell-header {
+    height: 64px;
+    align-items: stretch;
+    padding: 8px 12px;
+  }
+
+  .aw-shell-mobile-trigger {
+    display: grid;
+    place-items: center;
+  }
+
+  .aw-shell-header-content {
+    display: none;
+  }
+
+  .aw-shell-mobile-header {
+    display: grid;
+    min-width: 0;
+    flex: 1 1 auto;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    align-content: center;
+    height: 48px;
+  }
+
+  .aw-shell-mobile-account {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: flex-start;
+  }
+
+  .aw-shell-mobile-title-row,
+  .aw-shell-mobile-model-row {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .aw-shell-mobile-model-trigger {
+    width: min(48vw, 280px);
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .aw-shell-messages-inner {
+    padding: 20px 16px;
+  }
+
+  .aw-shell-composer {
+    padding: 10px 16px max(16px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aw-state-rail--streaming .aw-state-rail__marker {
+    animation: none;
+  }
+}
