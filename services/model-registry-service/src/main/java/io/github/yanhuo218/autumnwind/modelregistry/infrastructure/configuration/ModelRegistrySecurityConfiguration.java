@@ -3,8 +3,8 @@ package io.github.yanhuo218.autumnwind.modelregistry.infrastructure.configuratio
 import io.github.yanhuo218.autumnwind.modelregistry.application.endpoint.ModelRegistryErrorCode;
 import io.github.yanhuo218.autumnwind.modelregistry.infrastructure.security.ModelRegistrySecurityErrorWriter;
 import io.github.yanhuo218.autumnwind.modelregistry.infrastructure.security.ServiceJwtValidator;
-import io.github.yanhuo218.autumnwind.modelregistry.interfaces.http.CorrelationIdFilter;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,11 +22,12 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.NullSecurityContextRepository;
 
+import java.net.URI;
 import java.time.Clock;
 import java.util.UUID;
 
 @Configuration
-@EnableConfigurationProperties(ServiceJwtProperties.class)
+@EnableConfigurationProperties({ServiceJwtProperties.class, InferenceJwtProperties.class})
 public class ModelRegistrySecurityConfiguration {
 
     private static final String ENDPOINT_MANAGE_AUTHORITY = "SCOPE_model-registry.endpoint.manage";
@@ -36,25 +37,88 @@ public class ModelRegistrySecurityConfiguration {
     private static final String CONNECTION_TEST_EXECUTE_AUTHORITY =
             "SCOPE_model-registry.connection-test.execute";
 
-    @Bean
+    @Bean("modelRegistryServiceJwtDecoder")
     JwtDecoder modelRegistryServiceJwtDecoder(ServiceJwtProperties properties, Clock clock) {
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(properties.jwkSetUri().toString())
-                .jwsAlgorithm(SignatureAlgorithm.RS256)
-                .build();
-        decoder.setJwtValidator(new ServiceJwtValidator(properties, clock));
-        return decoder;
+        return decoder(properties.jwkSetUri(), new ServiceJwtValidator(properties, clock));
+    }
+
+    @Bean("inferenceJwtDecoder")
+    JwtDecoder inferenceJwtDecoder(InferenceJwtProperties properties, Clock clock) {
+        return decoder(properties.jwkSetUri(), new ServiceJwtValidator(properties, clock));
     }
 
     @Bean
     @Order(1)
-    SecurityFilterChain modelRegistrySecurityFilterChain(
+    SecurityFilterChain modelRegistryInternalSecurityFilterChain(
             HttpSecurity http,
-            JwtDecoder modelRegistryServiceJwtDecoder,
+            @Qualifier("inferenceJwtDecoder") JwtDecoder decoder,
             ModelRegistrySecurityErrorWriter errorWriter
     ) throws Exception {
-        http
-                .securityMatcher("/api/v1/model-registry/**", "/internal/v1/model-registry/**")
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        http.securityMatcher("/internal/v1/model-registry/**");
+        configureStateless(http, decoder, errorWriter);
+        http.authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.POST, "/internal/v1/model-registry/inference-target-resolutions")
+                .access((authentication, context) -> new AuthorizationDecision(
+                        mayResolveInferenceTarget(authentication.get())))
+                .requestMatchers(HttpMethod.POST, "/internal/v1/model-registry/connection-test-jobs/**")
+                .access((authentication, context) -> new AuthorizationDecision(
+                        mayExecuteConnectionTest(authentication.get())))
+                .anyRequest().denyAll());
+        return http.build();
+    }
+
+    @Bean
+    @Order(2)
+    SecurityFilterChain modelRegistryPublicSecurityFilterChain(
+            HttpSecurity http,
+            @Qualifier("modelRegistryServiceJwtDecoder") JwtDecoder decoder,
+            ModelRegistrySecurityErrorWriter errorWriter
+    ) throws Exception {
+        http.securityMatcher("/api/v1/model-registry/**");
+        configureStateless(http, decoder, errorWriter);
+        http.authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.GET, "/api/v1/model-registry/endpoints",
+                        "/api/v1/model-registry/endpoints/**")
+                .access((authentication, context) -> new AuthorizationDecision(
+                        mayManageEndpoints(authentication.get())))
+                .requestMatchers(HttpMethod.POST, "/api/v1/model-registry/endpoints")
+                .access((authentication, context) -> new AuthorizationDecision(
+                        mayManageEndpoints(authentication.get())))
+                .requestMatchers(HttpMethod.POST,
+                        "/api/v1/model-registry/endpoints/*/connection-tests")
+                .access((authentication, context) -> new AuthorizationDecision(
+                        mayManageEndpoints(authentication.get())))
+                .requestMatchers(HttpMethod.PUT, "/api/v1/model-registry/endpoints/*/credential")
+                .access((authentication, context) -> new AuthorizationDecision(
+                        mayManageEndpoints(authentication.get())))
+                .requestMatchers(HttpMethod.GET, "/api/v1/model-registry/models",
+                        "/api/v1/model-registry/models/*")
+                .access((authentication, context) -> new AuthorizationDecision(
+                        mayReadModels(authentication.get())))
+                .requestMatchers(HttpMethod.POST, "/api/v1/model-registry/models")
+                .access((authentication, context) -> new AuthorizationDecision(
+                        mayManageModels(authentication.get())))
+                .requestMatchers(HttpMethod.PUT, "/api/v1/model-registry/models/*")
+                .access((authentication, context) -> new AuthorizationDecision(
+                        mayManageModels(authentication.get())))
+                .anyRequest().denyAll());
+        return http.build();
+    }
+
+    private static JwtDecoder decoder(URI jwkSetUri, ServiceJwtValidator validator) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri.toString())
+                .jwsAlgorithm(SignatureAlgorithm.RS256)
+                .build();
+        decoder.setJwtValidator(validator);
+        return decoder;
+    }
+
+    private static void configureStateless(
+            HttpSecurity http,
+            JwtDecoder decoder,
+            ModelRegistrySecurityErrorWriter errorWriter
+    ) throws Exception {
+        http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .securityContext(context -> context.requireExplicitSave(true)
                         .securityContextRepository(new NullSecurityContextRepository()))
                 .requestCache(cache -> cache.disable())
@@ -62,41 +126,8 @@ public class ModelRegistrySecurityConfiguration {
                 .httpBasic(basic -> basic.disable())
                 .logout(logout -> logout.disable())
                 .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/internal/v1/model-registry/inference-target-resolutions")
-                        .access((authentication, context) -> new AuthorizationDecision(
-                                mayResolveInferenceTarget(authentication.get())))
-                        .requestMatchers(HttpMethod.POST,
-                                "/internal/v1/model-registry/connection-test-jobs/**")
-                        .access((authentication, context) -> new AuthorizationDecision(
-                                mayExecuteConnectionTest(authentication.get())))
-                        .requestMatchers(HttpMethod.GET, "/api/v1/model-registry/endpoints",
-                                "/api/v1/model-registry/endpoints/**")
-                        .access((authentication, context) -> new AuthorizationDecision(
-                                mayManageEndpoints(authentication.get())))
-                        .requestMatchers(HttpMethod.POST, "/api/v1/model-registry/endpoints")
-                        .access((authentication, context) -> new AuthorizationDecision(
-                                mayManageEndpoints(authentication.get())))
-                        .requestMatchers(HttpMethod.POST,
-                                "/api/v1/model-registry/endpoints/*/connection-tests")
-                        .access((authentication, context) -> new AuthorizationDecision(
-                                mayManageEndpoints(authentication.get())))
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/model-registry/endpoints/*/credential")
-                        .access((authentication, context) -> new AuthorizationDecision(
-                                mayManageEndpoints(authentication.get())))
-                        .requestMatchers(HttpMethod.GET, "/api/v1/model-registry/models",
-                                "/api/v1/model-registry/models/*")
-                        .access((authentication, context) -> new AuthorizationDecision(
-                                mayReadModels(authentication.get())))
-                        .requestMatchers(HttpMethod.POST, "/api/v1/model-registry/models")
-                        .access((authentication, context) -> new AuthorizationDecision(
-                                mayManageModels(authentication.get())))
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/model-registry/models/*")
-                        .access((authentication, context) -> new AuthorizationDecision(
-                                mayManageModels(authentication.get())))
-                        .anyRequest().denyAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer
-                        .jwt(jwt -> jwt.decoder(modelRegistryServiceJwtDecoder))
+                        .jwt(jwt -> jwt.decoder(decoder))
                         .authenticationEntryPoint((request, response, exception) -> {
                             response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
                             errorWriter.write(request, response, HttpServletResponse.SC_UNAUTHORIZED,
@@ -105,7 +136,6 @@ public class ModelRegistrySecurityConfiguration {
                         .accessDeniedHandler((request, response, exception) -> errorWriter.write(
                                 request, response, HttpServletResponse.SC_FORBIDDEN,
                                 ModelRegistryErrorCode.ACCESS_DENIED, "当前服务无权执行该操作。")));
-        return http.build();
     }
 
     private static boolean mayManageEndpoints(Authentication authentication) {

@@ -44,6 +44,12 @@ autumn-wind:
       jwk-set-uri: ${MODEL_REGISTRY_SERVICE_JWT_JWK_SET_URI:https://issuer.example/.well-known/jwks.json}
       allowed-callers: ${MODEL_REGISTRY_SERVICE_JWT_ALLOWED_CALLERS:gateway-service,admin-service}
       maximum-lifetime: ${MODEL_REGISTRY_SERVICE_JWT_MAXIMUM_LIFETIME:PT5M}
+    inference-jwt:
+      issuer: ${MODEL_REGISTRY_INFERENCE_JWT_ISSUER}
+      audience: ${MODEL_REGISTRY_INFERENCE_JWT_AUDIENCE:model-registry-service}
+      jwk-set-uri: ${MODEL_REGISTRY_INFERENCE_JWT_JWK_SET_URI}
+      allowed-callers: ${MODEL_REGISTRY_INFERENCE_JWT_ALLOWED_CALLERS:inference-gateway-service}
+      maximum-lifetime: ${MODEL_REGISTRY_INFERENCE_JWT_MAXIMUM_LIFETIME:PT60S}
     secret-store:
       master-key-file: ${MODEL_REGISTRY_SECRET_STORE_MASTER_KEY_FILE}
       key-id: ${MODEL_REGISTRY_SECRET_STORE_KEY_ID:local-v1}

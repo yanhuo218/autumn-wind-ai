@@ -58,6 +58,13 @@ class ConnectionTestWorkerPostgresIntegrationTest {
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
         registry.add("autumn-wind.model-registry.secret-store.master-key-file",
                 () -> requiredEnvironment("TASK5_MASTER_KEY_FILE"));
+        registry.add("autumn-wind.model-registry.inference-jwt.issuer", () -> "https://inference.internal");
+        registry.add("autumn-wind.model-registry.inference-jwt.audience", () -> "model-registry-service");
+        registry.add("autumn-wind.model-registry.inference-jwt.jwk-set-uri",
+                () -> "https://inference.internal/internal/v1/security/jwks");
+        registry.add("autumn-wind.model-registry.inference-jwt.allowed-callers",
+                () -> "inference-gateway-service");
+        registry.add("autumn-wind.model-registry.inference-jwt.maximum-lifetime", () -> "PT60S");
     }
 
     @Test

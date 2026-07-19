@@ -9,7 +9,10 @@ import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.BadJwtException;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -34,7 +37,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "autumn-wind.model-registry.service-jwt.audience=model-registry-service",
         "autumn-wind.model-registry.service-jwt.jwk-set-uri=https://issuer.example/.well-known/jwks.json",
         "autumn-wind.model-registry.service-jwt.allowed-callers=gateway-service,admin-service",
-        "autumn-wind.model-registry.service-jwt.maximum-lifetime=PT5M"
+        "autumn-wind.model-registry.service-jwt.maximum-lifetime=PT5M",
+        "autumn-wind.model-registry.inference-jwt.issuer=https://inference.internal",
+        "autumn-wind.model-registry.inference-jwt.audience=model-registry-service",
+        "autumn-wind.model-registry.inference-jwt.jwk-set-uri=https://inference.internal/internal/v1/security/jwks",
+        "autumn-wind.model-registry.inference-jwt.allowed-callers=inference-gateway-service",
+        "autumn-wind.model-registry.inference-jwt.maximum-lifetime=PT60S"
 })
 class ModelRegistryModelSecurityTest {
 
@@ -86,8 +94,30 @@ class ModelRegistryModelSecurityTest {
     @MockitoBean
     private ModelAdministrationService administrationService;
 
-    @MockitoBean
-    private JwtDecoder jwtDecoder;
+    @MockitoBean(name = "inferenceJwtDecoder")
+    private JwtDecoder inferenceJwtDecoder;
+
+    @MockitoBean(name = "modelRegistryServiceJwtDecoder")
+    private JwtDecoder modelRegistryServiceJwtDecoder;
+
+    @Test
+    void 网关令牌仅由公共链验证并且内部链拒绝() throws Exception {
+        when(administrationService.list(java.util.UUID.fromString(ACTOR_ID))).thenReturn(List.of());
+        when(modelRegistryServiceJwtDecoder.decode("gateway-token")).thenReturn(gatewayJwt());
+        when(inferenceJwtDecoder.decode("gateway-token"))
+                .thenThrow(new BadJwtException("内部信任域不接受网关令牌。"));
+
+        mockMvc.perform(get(MODELS_PATH)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer gateway-token"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/internal/v1/model-registry/inference-target-resolutions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer gateway-token")
+                        .contentType("application/json")
+                        .content("{}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AW-MODEL_REGISTRY-AUTH-0001"));
+    }
 
     @Test
     void 端点Scope不能访问模型接口() throws Exception {
@@ -169,5 +199,20 @@ class ModelRegistryModelSecurityTest {
                     }
                 })
                 .authorities(new SimpleGrantedAuthority("SCOPE_" + scope));
+    }
+
+    private static Jwt gatewayJwt() {
+        java.time.Instant issuedAt = java.time.Instant.now();
+        return Jwt.withTokenValue("gateway-token")
+                .header("alg", "RS256")
+                .issuer("https://issuer.example")
+                .subject("gateway-service")
+                .audience(List.of("model-registry-service"))
+                .issuedAt(issuedAt)
+                .expiresAt(issuedAt.plusSeconds(300))
+                .claim("jti", "gateway-jti")
+                .claim("scope", "model-registry.model.read")
+                .claim("actor_user_id", ACTOR_ID)
+                .build();
     }
 }

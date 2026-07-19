@@ -9,8 +9,11 @@ import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.BadJwtException;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -19,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -32,7 +36,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "autumn-wind.model-registry.service-jwt.audience=model-registry-service",
         "autumn-wind.model-registry.service-jwt.jwk-set-uri=https://issuer.example/.well-known/jwks.json",
         "autumn-wind.model-registry.service-jwt.allowed-callers=gateway-service,admin-service",
-        "autumn-wind.model-registry.service-jwt.maximum-lifetime=PT5M"
+        "autumn-wind.model-registry.service-jwt.maximum-lifetime=PT5M",
+        "autumn-wind.model-registry.inference-jwt.issuer=https://inference.internal",
+        "autumn-wind.model-registry.inference-jwt.audience=model-registry-service",
+        "autumn-wind.model-registry.inference-jwt.jwk-set-uri=https://inference.internal/internal/v1/security/jwks",
+        "autumn-wind.model-registry.inference-jwt.allowed-callers=inference-gateway-service",
+        "autumn-wind.model-registry.inference-jwt.maximum-lifetime=PT60S"
 })
 class ModelRegistryInternalSecurityTest {
 
@@ -47,8 +56,44 @@ class ModelRegistryInternalSecurityTest {
     @MockitoBean
     private InferenceTargetResolutionService resolutionService;
 
-    @MockitoBean
-    private JwtDecoder jwtDecoder;
+    @MockitoBean(name = "inferenceJwtDecoder")
+    private JwtDecoder inferenceJwtDecoder;
+
+    @MockitoBean(name = "modelRegistryServiceJwtDecoder")
+    private JwtDecoder modelRegistryServiceJwtDecoder;
+
+    @Test
+    void 推理令牌仅由内部链验证并且公共链拒绝() throws Exception {
+        when(inferenceJwtDecoder.decode("inference-token")).thenReturn(inferenceJwt());
+        when(modelRegistryServiceJwtDecoder.decode("inference-token"))
+                .thenThrow(new BadJwtException("公共信任域不接受推理令牌。"));
+
+        mockMvc.perform(post(PATH)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer inference-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(REQUEST_BODY))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/model-registry/models")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer inference-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AW-MODEL_REGISTRY-AUTH-0001"));
+    }
+
+    @Test
+    void 内部错误Subject返回401() throws Exception {
+        when(inferenceJwtDecoder.decode("invalid-inference-subject"))
+                .thenThrow(new BadJwtException("内部调用方不受信任。"));
+
+        mockMvc.perform(post(PATH)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer invalid-inference-subject")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(REQUEST_BODY))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AW-MODEL_REGISTRY-AUTH-0001"));
+    }
 
     @Test
     void 正确专用Scope和操作者声明可以解析推理目标() throws Exception {
@@ -91,5 +136,20 @@ class ModelRegistryInternalSecurityTest {
                 .andExpect(jsonPath("$.code").value("AW-MODEL_REGISTRY-FORBIDDEN-0001"));
 
         verify(resolutionService, never()).resolve(any(), any());
+    }
+
+    private static Jwt inferenceJwt() {
+        java.time.Instant issuedAt = java.time.Instant.now();
+        return Jwt.withTokenValue("inference-token")
+                .header("alg", "RS256")
+                .issuer("https://inference.internal")
+                .subject("inference-gateway-service")
+                .audience(java.util.List.of("model-registry-service"))
+                .issuedAt(issuedAt)
+                .expiresAt(issuedAt.plusSeconds(30))
+                .claim("jti", "inference-jti")
+                .claim("scope", "model-registry.inference.resolve")
+                .claim("actor_user_id", ACTOR_ID)
+                .build();
     }
 }

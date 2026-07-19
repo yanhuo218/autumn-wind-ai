@@ -1,6 +1,6 @@
 package io.github.yanhuo218.autumnwind.modelregistry.infrastructure.security;
 
-import io.github.yanhuo218.autumnwind.modelregistry.infrastructure.configuration.ServiceJwtProperties;
+import io.github.yanhuo218.autumnwind.modelregistry.infrastructure.configuration.ServiceJwtValidationProperties;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
@@ -21,7 +21,7 @@ public final class ServiceJwtValidator implements OAuth2TokenValidator<Jwt> {
     private static final Duration ALLOWED_CLOCK_SKEW = Duration.ofSeconds(60);
     private final OAuth2TokenValidator<Jwt> delegate;
 
-    public ServiceJwtValidator(ServiceJwtProperties properties, Clock clock) {
+    public ServiceJwtValidator(ServiceJwtValidationProperties properties, Clock clock) {
         Objects.requireNonNull(properties, "Service JWT 配置不能为空。");
         Objects.requireNonNull(clock, "时钟不能为空。");
         JwtTimestampValidator timestampValidator = new JwtTimestampValidator(ALLOWED_CLOCK_SKEW);
@@ -32,6 +32,7 @@ public final class ServiceJwtValidator implements OAuth2TokenValidator<Jwt> {
                 new JwtAudienceValidator(properties.audience()),
                 new JwtClaimValidator<>("sub", subject -> subject instanceof String value
                         && properties.allowedCallers().contains(value)),
+                new JwtClaimValidator<>("jti", value -> value instanceof String text && !text.isBlank()),
                 token -> validateLifetime(token, properties.maximumLifetime(), clock.instant())
         );
     }

@@ -8,8 +8,8 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
-@ConfigurationProperties("autumn-wind.model-registry.service-jwt")
-public record ServiceJwtProperties(
+@ConfigurationProperties("autumn-wind.model-registry.inference-jwt")
+public record InferenceJwtProperties(
         String issuer,
         String audience,
         URI jwkSetUri,
@@ -17,30 +17,35 @@ public record ServiceJwtProperties(
         Duration maximumLifetime
 ) implements ServiceJwtValidationProperties {
 
-    public ServiceJwtProperties {
-        issuer = requireText(issuer, "Service JWT issuer 不能为空。");
-        audience = requireText(audience, "Service JWT audience 不能为空。");
-        Objects.requireNonNull(maximumLifetime, "Service JWT 最大有效期不能为空。");
+    public static final String REQUIRED_CALLER = "inference-gateway-service";
+
+    public InferenceJwtProperties {
+        issuer = requireText(issuer, "Inference JWT issuer 不能为空。");
+        audience = requireText(audience, "Inference JWT audience 不能为空。");
+        Objects.requireNonNull(maximumLifetime, "Inference JWT 最大有效期不能为空。");
         if (maximumLifetime.isNegative() || maximumLifetime.isZero()
-                || maximumLifetime.compareTo(Duration.ofHours(1)) > 0) {
-            throw new IllegalArgumentException("Service JWT 最大有效期必须大于零且不超过 1 小时。");
+                || maximumLifetime.compareTo(Duration.ofSeconds(60)) > 0) {
+            throw new IllegalArgumentException("Inference JWT 最大有效期必须大于零且不超过 60 秒。");
         }
-        Objects.requireNonNull(jwkSetUri, "Service JWT JWK Set URI 不能为空。");
+        Objects.requireNonNull(jwkSetUri, "Inference JWT JWK Set URI 不能为空。");
         if (!jwkSetUri.isAbsolute() || !"https".equalsIgnoreCase(jwkSetUri.getScheme())
                 || jwkSetUri.getHost() == null || jwkSetUri.getUserInfo() != null
                 || jwkSetUri.getFragment() != null) {
-            throw new IllegalArgumentException("Service JWT JWK Set URI 必须是无用户信息和片段的 HTTPS 地址。");
+            throw new IllegalArgumentException("Inference JWT JWK Set URI 必须是无用户信息和片段的 HTTPS 地址。");
         }
         if (allowedCallers == null || allowedCallers.isEmpty()) {
-            throw new IllegalArgumentException("Service JWT 允许调用方不能为空。");
+            throw new IllegalArgumentException("Inference JWT 允许调用方不能为空。");
         }
         Set<String> normalizedCallers = new LinkedHashSet<>();
         for (String caller : allowedCallers) {
-            String normalizedCaller = requireText(caller, "Service JWT 调用方标识不能为空。");
+            String normalizedCaller = requireText(caller, "Inference JWT 调用方标识不能为空。");
             if (normalizedCaller.length() > 256 || normalizedCaller.chars().anyMatch(Character::isWhitespace)) {
-                throw new IllegalArgumentException("Service JWT 调用方标识格式不合法。");
+                throw new IllegalArgumentException("Inference JWT 调用方标识格式不合法。");
             }
             normalizedCallers.add(normalizedCaller);
+        }
+        if (!normalizedCallers.equals(Set.of(REQUIRED_CALLER))) {
+            throw new IllegalArgumentException("Inference JWT 仅允许 inference-gateway-service 调用。");
         }
         allowedCallers = Set.copyOf(normalizedCallers);
     }

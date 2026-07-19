@@ -33,7 +33,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "autumn-wind.model-registry.service-jwt.audience=model-registry-service",
         "autumn-wind.model-registry.service-jwt.jwk-set-uri=https://issuer.example/.well-known/jwks.json",
         "autumn-wind.model-registry.service-jwt.allowed-callers=gateway-service,admin-service",
-        "autumn-wind.model-registry.service-jwt.maximum-lifetime=PT5M"
+        "autumn-wind.model-registry.service-jwt.maximum-lifetime=PT5M",
+        "autumn-wind.model-registry.inference-jwt.issuer=https://inference.internal",
+        "autumn-wind.model-registry.inference-jwt.audience=model-registry-service",
+        "autumn-wind.model-registry.inference-jwt.jwk-set-uri=https://inference.internal/internal/v1/security/jwks",
+        "autumn-wind.model-registry.inference-jwt.allowed-callers=inference-gateway-service",
+        "autumn-wind.model-registry.inference-jwt.maximum-lifetime=PT60S"
 })
 class ModelRegistrySecurityTest {
 
@@ -48,8 +53,11 @@ class ModelRegistrySecurityTest {
     @MockitoBean
     private EndpointConnectionTestService connectionTestService;
 
-    @MockitoBean
-    private JwtDecoder jwtDecoder;
+    @MockitoBean(name = "inferenceJwtDecoder")
+    private JwtDecoder inferenceJwtDecoder;
+
+    @MockitoBean(name = "modelRegistryServiceJwtDecoder")
+    private JwtDecoder modelRegistryServiceJwtDecoder;
 
     @Test
     void 缺少ServiceJwt返回统一Bearer401() throws Exception {
