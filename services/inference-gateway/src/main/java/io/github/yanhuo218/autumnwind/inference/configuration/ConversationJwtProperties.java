@@ -39,6 +39,13 @@ public record ConversationJwtProperties(
         }
     }
 
+    @Override
+    public String toString() {
+        return "ConversationJwtProperties[issuer=<REDACTED>, audience=" + audience
+                + ", jwkSetUri=<REDACTED>, allowedCallers=" + allowedCallers
+                + ", maximumLifetime=" + maximumLifetime + "]";
+    }
+
     private static URI requireHttpsUri(URI value, String name) {
         Objects.requireNonNull(value, name + " 不能为空。");
         if (!value.isAbsolute() || !"https".equalsIgnoreCase(value.getScheme())

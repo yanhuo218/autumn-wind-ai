@@ -32,6 +32,12 @@ public record InferenceServiceJwtProperties(
         }
     }
 
+    @Override
+    public String toString() {
+        return "InferenceServiceJwtProperties[issuer=<REDACTED>, privateKeyPath=<REDACTED>"
+                + ", publicKeyPath=<REDACTED>, keyId=" + keyId + ", lifetime=" + lifetime + "]";
+    }
+
     private static String requireText(String value, String message) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(message);

@@ -21,6 +21,12 @@ public record ModelRegistryClientProperties(
         }
     }
 
+    @Override
+    public String toString() {
+        return "ModelRegistryClientProperties[baseUrl=<REDACTED>, timeout=" + timeout
+                + ", allowLoopbackHttpForTest=" + allowLoopbackHttpForTest + "]";
+    }
+
     private static URI requireSafeBaseUrl(URI value, boolean allowLoopbackHttpForTest) {
         Objects.requireNonNull(value, "Model Registry 基础地址不能为空。");
         if (!value.isAbsolute() || value.getHost() == null || value.getUserInfo() != null

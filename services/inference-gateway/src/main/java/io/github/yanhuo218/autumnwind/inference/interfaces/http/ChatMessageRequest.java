@@ -13,6 +13,11 @@ public record ChatMessageRequest(
         return new ChatInferenceCommand.Message(role.name(), content);
     }
 
+    @Override
+    public String toString() {
+        return "ChatMessageRequest[role=" + role + ", content=<REDACTED>]";
+    }
+
     public enum Role {
         user,
         assistant

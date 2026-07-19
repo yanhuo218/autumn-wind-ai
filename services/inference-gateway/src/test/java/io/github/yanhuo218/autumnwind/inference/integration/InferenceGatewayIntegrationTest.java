@@ -57,7 +57,7 @@ class InferenceGatewayIntegrationTest {
         assertEquals(List.of("start", "text_delta", "usage", "done"), eventTypes(events));
         assertTrue(Arrays.equals(API_KEY_PLACEHOLDER, provider.apiKeySnapshot()));
         assertFalse(allZero(provider.apiKeySnapshot()));
-        assertTrue(allZero(provider.apiKeyReference()));
+        assertEventuallyZero(provider);
     }
 
     @Test
@@ -76,6 +76,9 @@ class InferenceGatewayIntegrationTest {
         assertEquals("用户文本占位符", request.path("messages").get(1).path("content").stringValue());
         assertTrue(request.path("stream").booleanValue());
         assertTrue(request.path("stream_options").path("include_usage").booleanValue());
+        String providerRequest = new String(provider.requestJson(), StandardCharsets.UTF_8);
+        assertFalse(providerRequest.contains(OWNER_ID.toString()));
+        assertFalse(providerRequest.contains(MODEL_ID.toString()));
     }
 
     @Test
@@ -149,11 +152,11 @@ class InferenceGatewayIntegrationTest {
         assertEquals(InferenceEvent.ErrorCode.CONNECTION_FAILED, error.code());
         assertFalse(error.retryable());
         assertEquals(1, provider.callCount());
-        assertTrue(allZero(provider.apiKeyReference()));
+        assertEventuallyZero(provider);
     }
 
     @Test
-    void 首帧前超时最多重试两次且每次重新解密和校验DNS() throws Exception {
+    void 首帧前absoluteDeadline终止后不重试且最终清零凭据() throws Exception {
         FakeOpenAiProvider provider = new FakeOpenAiProvider(FakeOpenAiProvider.Scenario.NO_RESPONSE);
         Fixture fixture = fixture(provider, List.of(publicAddress()));
         InferenceTarget target = withRequestTimeout(fixture.target(), 1);
@@ -163,11 +166,11 @@ class InferenceGatewayIntegrationTest {
 
         InferenceEvent.Error error = singleError(events);
         assertEquals(InferenceEvent.ErrorCode.CONNECTION_FAILED, error.code());
-        assertTrue(error.retryable());
-        assertEquals(3, provider.callCount());
-        assertEquals(3, fixture.dnsCount().get());
-        assertEquals(3, fixture.secretStore().decryptCount());
-        assertTrue(allZero(provider.apiKeyReference()));
+        assertFalse(error.retryable());
+        assertEquals(1, provider.callCount());
+        assertEquals(1, fixture.dnsCount().get());
+        assertEquals(1, fixture.secretStore().decryptCount());
+        assertEventuallyZero(provider);
     }
 
     @ParameterizedTest
@@ -294,6 +297,10 @@ class InferenceGatewayIntegrationTest {
     }
 
     private static InferenceEvent.Error singleError(List<InferenceEvent> events) {
+        if (events.size() == 2) {
+            assertInstanceOf(InferenceEvent.Start.class, events.getFirst());
+            return assertInstanceOf(InferenceEvent.Error.class, events.getLast());
+        }
         assertEquals(1, events.size());
         return assertInstanceOf(InferenceEvent.Error.class, events.getFirst());
     }
@@ -317,6 +324,14 @@ class InferenceGatewayIntegrationTest {
             }
         }
         return true;
+    }
+
+    private static void assertEventuallyZero(FakeOpenAiProvider provider) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
+        while (!allZero(provider.apiKeyReference()) && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        assertTrue(allZero(provider.apiKeyReference()));
     }
 
     private record Fixture(

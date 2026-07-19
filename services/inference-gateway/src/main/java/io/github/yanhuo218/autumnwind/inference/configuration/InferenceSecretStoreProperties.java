@@ -18,4 +18,9 @@ public record InferenceSecretStoreProperties(Path masterKeyFile, String keyId) {
         }
         keyId = keyId.trim();
     }
+
+    @Override
+    public String toString() {
+        return "InferenceSecretStoreProperties[masterKeyFile=<REDACTED>, keyId=" + keyId + "]";
+    }
 }

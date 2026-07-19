@@ -14,4 +14,9 @@ public record ValidatedTarget(URI uri, List<InetAddress> addresses) {
             throw new IllegalArgumentException("目标地址不能为空。");
         }
     }
+
+    @Override
+    public String toString() {
+        return "ValidatedTarget[uri=<REDACTED>, addresses=<REDACTED>]";
+    }
 }

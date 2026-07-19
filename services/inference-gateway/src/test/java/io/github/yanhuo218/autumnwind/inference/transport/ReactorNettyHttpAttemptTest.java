@@ -62,7 +62,7 @@ class ReactorNettyHttpAttemptTest {
     private static final AtomicInteger FOLLOWED_COUNT = new AtomicInteger();
     private static final List<String> AUTHORIZATIONS = new CopyOnWriteArrayList<>();
     private static final List<String> SNI_HOSTS = new CopyOnWriteArrayList<>();
-    private static final AtomicBoolean LIVE_LIMIT_SOURCE_CANCELLED = new AtomicBoolean();
+    private static final AtomicReference<CountDownLatch> LIVE_LIMIT_CANCEL_LATCH = new AtomicReference<>();
     private static final AtomicBoolean LIVE_CANCEL_SOURCE_CANCELLED = new AtomicBoolean();
     private static final AtomicReference<ByteBuf> LIVE_CANCEL_BUFFER = new AtomicReference<>();
     private static final AtomicReference<CountDownLatch> LIVE_CANCEL_LATCH = new AtomicReference<>();
@@ -110,11 +110,12 @@ class ReactorNettyHttpAttemptTest {
                                 .thenReturn("late-header"));
                     }
                     if ("/limit-total-live".equals(request.uri())) {
-                        LIVE_LIMIT_SOURCE_CANCELLED.set(false);
+                        CountDownLatch cancelled = new CountDownLatch(1);
+                        LIVE_LIMIT_CANCEL_LATCH.set(cancelled);
                         return response.sendByteArray(Flux.interval(Duration.ofMillis(10))
                                 .take(17)
                                 .map(ignored -> new byte[1_048_576])
-                                .doOnCancel(() -> LIVE_LIMIT_SOURCE_CANCELLED.set(true)));
+                                .doOnCancel(cancelled::countDown));
                     }
                     if ("/cancel-live".equals(request.uri())) {
                         LIVE_CANCEL_SOURCE_CANCELLED.set(false);
@@ -286,7 +287,7 @@ class ReactorNettyHttpAttemptTest {
     }
 
     @Test
-    void 真实分块响应累计超限时取消服务端源() {
+    void 真实分块响应累计超限时取消服务端源() throws InterruptedException {
         ResourceLeakDetector.Level originalLevel = ResourceLeakDetector.getLevel();
         try {
             ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID);
@@ -295,7 +296,8 @@ class ReactorNettyHttpAttemptTest {
                     () -> exchange("/limit-total-live").blockLast(Duration.ofSeconds(5)));
 
             assertEquals("服务商响应超过资源限制。", error.getMessage());
-            assertTrue(LIVE_LIMIT_SOURCE_CANCELLED.get());
+            CountDownLatch cancelled = LIVE_LIMIT_CANCEL_LATCH.get();
+            assertTrue(cancelled != null && cancelled.await(2, TimeUnit.SECONDS));
         } finally {
             ResourceLeakDetector.setLevel(originalLevel);
         }

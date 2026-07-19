@@ -46,4 +46,16 @@ public record ChatCompletionRequest(
                 temperature,
                 maxOutputTokens);
     }
+
+    @Override
+    public String toString() {
+        return "ChatCompletionRequest[ownerUserId=" + ownerUserId
+                + ", modelId=" + modelId
+                + ", generationId=" + generationId
+                + ", invocationAttemptId=" + invocationAttemptId
+                + ", messages=<REDACTED>"
+                + ", systemPrompt=<REDACTED>"
+                + ", temperature=" + temperature
+                + ", maxOutputTokens=" + maxOutputTokens + "]";
+    }
 }

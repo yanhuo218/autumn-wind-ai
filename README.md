@@ -55,6 +55,7 @@ Autumn Wind Ai 是一个面向多用户场景的 BYOK（Bring Your Own Key）AI 
 - [Model Registry 领域规则设计](docs/superpowers/specs/2026-07-18-model-registry-domain-design.md)
 - [Model Registry Service 开发说明](docs/development/model-registry-service.md)
 - [Inference Gateway 开发说明](docs/development/inference-gateway.md)
+- [Inference Gateway 内部推理入口](docs/development/inference-internal-ingress.md)
 - [Gateway Service 开发说明](docs/development/gateway-service.md)
 - [用户端聊天工作区开发说明](docs/development/user-web.md)
 
@@ -62,4 +63,4 @@ Autumn Wind Ai 是一个面向多用户场景的 BYOK（Bring Your Own Key）AI 
 
 ## 开发状态
 
-阶段 1 至阶段 3 已完成。阶段 4 正在收敛 Model Registry、Inference Gateway、Conversation 与用户端的真实链路，并已建立 Gateway 的认证透明代理、Session Introspection 和模型目录只读代理。用户端已覆盖文本发送、停止、断线续传、快照同步、失败恢复、响应式布局和 Playwright 关键流程。附件、多模态和真实 Conversation 生产代理仍按后续计划实施。
+阶段 1 至阶段 3 已完成。阶段 4 正在收敛 Model Registry、Inference Gateway、Conversation 与用户端的真实链路，并已建立 Gateway 的认证透明代理、Session Introspection 和模型目录只读代理。当前完成到内部推理依赖，不代表浏览器真实聊天链路完成。用户端已覆盖文本发送、停止、断线续传、快照同步、失败恢复、响应式布局和 Playwright 关键流程。附件、多模态和真实 Conversation 生产代理仍按后续计划实施。
