@@ -6,8 +6,11 @@ import io.github.yanhuo218.autumnwind.security.secrets.SecretStore;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 public final class EndpointCredentialResolver {
@@ -27,7 +30,7 @@ public final class EndpointCredentialResolver {
         Objects.requireNonNull(target, "推理目标不能为空。");
         Objects.requireNonNull(action, "凭据操作不能为空。");
         return Mono.defer(() -> Mono.usingWhen(
-                Mono.fromCallable(() -> resolve(target)),
+                resource(target),
                 credential -> Mono.defer(() -> action.apply(credential)),
                 EndpointCredentialResolver::close,
                 (credential, error) -> close(credential),
@@ -42,7 +45,7 @@ public final class EndpointCredentialResolver {
         Objects.requireNonNull(target, "推理目标不能为空。");
         Objects.requireNonNull(action, "凭据操作不能为空。");
         return Flux.defer(() -> Flux.usingWhen(
-                Mono.fromCallable(() -> resolve(target)),
+                resource(target),
                 credential -> Flux.defer(() -> Flux.from(action.apply(credential))),
                 EndpointCredentialResolver::close,
                 (credential, error) -> close(credential),
@@ -57,6 +60,35 @@ public final class EndpointCredentialResolver {
                 target.endpointId().toString()
         );
         return new ResolvedCredential(secretStore.decrypt(target.credential(), context));
+    }
+
+    private Mono<ResolvedCredential> resource(InferenceTarget target) {
+        return Mono.create(sink -> {
+            AtomicBoolean cancelled = new AtomicBoolean();
+            AtomicReference<ResolvedCredential> resolved = new AtomicReference<>();
+            sink.onCancel(() -> {
+                cancelled.set(true);
+                ResolvedCredential credential = resolved.get();
+                if (credential != null) {
+                    credential.close();
+                }
+            });
+            Schedulers.boundedElastic().schedule(() -> {
+                try {
+                    ResolvedCredential credential = resolve(target);
+                    resolved.set(credential);
+                    if (cancelled.get()) {
+                        credential.close();
+                    } else {
+                        sink.success(credential);
+                    }
+                } catch (Throwable error) {
+                    if (!cancelled.get()) {
+                        sink.error(error);
+                    }
+                }
+            });
+        });
     }
 
     private static Mono<Void> close(ResolvedCredential credential) {

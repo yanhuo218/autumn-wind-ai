@@ -5,5 +5,15 @@ import reactor.core.publisher.Flux;
 
 public interface ProviderExchangeClient {
 
-    Flux<ProviderFrame> exchange(ValidatedTarget target, ProviderRequest request);
+    final class ResponseLimitExceededException extends RuntimeException {
+
+        public ResponseLimitExceededException() {
+            super("服务商响应超过资源限制。");
+        }
+    }
+
+    Flux<ProviderFrame> exchange(
+            ValidatedTarget target,
+            ProviderRequest request,
+            ProviderExchangeLimits limits);
 }

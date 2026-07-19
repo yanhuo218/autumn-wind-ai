@@ -5,10 +5,13 @@ import io.github.yanhuo218.autumnwind.inference.registry.InferenceTarget;
 import io.github.yanhuo218.autumnwind.inference.security.OutboundTargetPolicy;
 import io.github.yanhuo218.autumnwind.inference.security.TargetPolicyException;
 import io.github.yanhuo218.autumnwind.inference.transport.ProviderExchangeClient;
+import io.github.yanhuo218.autumnwind.inference.transport.ProviderExchangeLimits;
 import io.github.yanhuo218.autumnwind.inference.transport.ProviderFrame;
 import io.github.yanhuo218.autumnwind.inference.transport.ProviderRequest;
 import io.github.yanhuo218.autumnwind.inference.chat.InferenceEvent.ErrorCode;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -18,6 +21,7 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class OpenAiChatCompletionsAdapter {
 
@@ -51,7 +55,15 @@ public final class OpenAiChatCompletionsAdapter {
                 validate(command, target);
                 URI finalUri = chatCompletionsUri(target.endpointBaseUrl());
                 byte[] body = requestBody(command, target);
-                return executeWithRetry(command, target, finalUri, body, 0);
+                long deadlineNanos = System.nanoTime()
+                        + Duration.ofSeconds(target.endpointRequestTimeoutSeconds()).toNanos();
+                Flux<InferenceEvent> workflow = Flux.concat(
+                        Flux.just(new InferenceEvent.Start(UUID.randomUUID().toString())),
+                        executeWithRetry(command, target, finalUri, body, deadlineNanos, 0));
+                return onlyFirstTerminal(workflow
+                        .takeUntilOther(deadlineSignal(remainingDuration(deadlineNanos)))
+                        .onErrorResume(RequestDeadlineExceededException.class,
+                                ignored -> Flux.just(error(command, ErrorCode.CONNECTION_FAILED, false))));
             } catch (LocalValidationException | TargetPolicyException exception) {
                 return Flux.just(error(command, ErrorCode.TARGET_REJECTED, false));
             } catch (RuntimeException exception) {
@@ -65,13 +77,18 @@ public final class OpenAiChatCompletionsAdapter {
             InferenceTarget target,
             URI finalUri,
             byte[] body,
+            long deadlineNanos,
             int retryCount
     ) {
-        return executeAttempt(command, target, finalUri, body)
+        Duration remaining = remainingDuration(deadlineNanos);
+        if (remaining == null) {
+            return Flux.error(new RequestDeadlineExceededException());
+        }
+        return executeAttempt(command, target, finalUri, body, remaining)
                 .onErrorResume(failure -> {
                     AttemptFailure mapped = mapBeforeStart(failure);
                     if (mapped.retryAllowed && retryCount < MAX_RETRIES) {
-                        return executeWithRetry(command, target, finalUri, body, retryCount + 1);
+                        return executeWithRetry(command, target, finalUri, body, deadlineNanos, retryCount + 1);
                     }
                     return Flux.just(error(command, mapped.code, mapped.retryable));
                 });
@@ -81,14 +98,30 @@ public final class OpenAiChatCompletionsAdapter {
             ChatInferenceCommand command,
             InferenceTarget target,
             URI finalUri,
-            byte[] body
+            byte[] body,
+            Duration remaining
     ) {
         return credentialResolver.withCredentialFlux(target, credential -> Flux.defer(() -> {
-            var validatedTarget = targetPolicy.validate(finalUri);
+            return Mono.fromCallable(() -> targetPolicy.validate(finalUri))
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .flatMapMany(validatedTarget -> exchange(command, target, body, remaining, credential, validatedTarget));
+        }));
+    }
+
+    private Flux<InferenceEvent> exchange(
+            ChatInferenceCommand command,
+            InferenceTarget target,
+            byte[] body,
+            Duration remaining,
+            io.github.yanhuo218.autumnwind.inference.credentials.ResolvedCredential credential,
+            io.github.yanhuo218.autumnwind.inference.security.ValidatedTarget validatedTarget
+    ) {
             ProviderRequest request = new ProviderRequest(credential.apiKey(), body);
+            ProviderExchangeLimits limits = ProviderExchangeLimits
+                    .forTargetTimeoutSeconds(target.endpointRequestTimeoutSeconds());
             Flux<ProviderFrame> exchange;
             try {
-                exchange = exchangeClient.exchange(validatedTarget, request);
+                exchange = exchangeClient.exchange(validatedTarget, request, limits);
             } catch (RuntimeException exception) {
                 return Flux.error(mapExchangeError(exception));
             }
@@ -96,7 +129,8 @@ public final class OpenAiChatCompletionsAdapter {
                 return Flux.error(new ConnectionAttemptFailure());
             }
             return exchange
-                    .timeout(Duration.ofSeconds(target.endpointRequestTimeoutSeconds()))
+                    .takeUntilOther(Mono.delay(remaining)
+                            .then(Mono.error(new RequestDeadlineExceededException())))
                     .onErrorMap(OpenAiChatCompletionsAdapter::mapExchangeError)
                     .switchOnFirst((signal, frames) -> {
                         if (signal.hasError()) {
@@ -112,12 +146,23 @@ public final class OpenAiChatCompletionsAdapter {
                         Flux<InferenceEvent> decoded = command.stream()
                                 ? decoder.decode(frames, target.capabilities().reasoning())
                                 : decoder.decodeNonStreaming(frames, target.capabilities().reasoning());
-                        return Flux.concat(
-                                        Flux.just(new InferenceEvent.Start(UUID.randomUUID().toString())),
-                                        decoded)
-                                .onErrorResume(error -> Flux.just(mapAfterStart(command, error)));
+                        return decoded.onErrorResume(error -> Flux.just(mapAfterStart(command, error)));
                     });
-        }));
+    }
+
+    private static Flux<InferenceEvent> onlyFirstTerminal(Flux<InferenceEvent> events) {
+        return Flux.defer(() -> {
+            AtomicBoolean terminal = new AtomicBoolean();
+            return events.<InferenceEvent>handle((event, sink) -> {
+                        if (!terminal.get()) {
+                            sink.next(event);
+                            if (event instanceof InferenceEvent.Error || event instanceof InferenceEvent.Done) {
+                                terminal.set(true);
+                            }
+                        }
+                    })
+                    .takeUntil(event -> event instanceof InferenceEvent.Error || event instanceof InferenceEvent.Done);
+        });
     }
 
     private byte[] requestBody(ChatInferenceCommand command, InferenceTarget target) {
@@ -211,7 +256,10 @@ public final class OpenAiChatCompletionsAdapter {
     }
 
     private static Throwable mapExchangeError(Throwable error) {
-        if (error instanceof AttemptFailure || error instanceof TargetPolicyException) {
+        if (error instanceof AttemptFailure
+                || error instanceof TargetPolicyException
+                || error instanceof ProviderExchangeClient.ResponseLimitExceededException
+                || error instanceof RequestDeadlineExceededException) {
             return error;
         }
         return new ConnectionAttemptFailure();
@@ -224,11 +272,18 @@ public final class OpenAiChatCompletionsAdapter {
         if (failure instanceof TargetPolicyException) {
             return new AttemptFailure(ErrorCode.TARGET_REJECTED, false, false);
         }
+        if (failure instanceof ProviderExchangeClient.ResponseLimitExceededException) {
+            return new AttemptFailure(ErrorCode.PROVIDER_RESPONSE_INVALID, false, false);
+        }
+        if (failure instanceof RequestDeadlineExceededException) {
+            return new AttemptFailure(ErrorCode.CONNECTION_FAILED, false, false);
+        }
         return new AttemptFailure(ErrorCode.INTERNAL_DEPENDENCY_ERROR, false, false);
     }
 
     private static InferenceEvent.Error mapAfterStart(ChatInferenceCommand command, Throwable failure) {
-        if (failure instanceof ProviderResponseException) {
+        if (failure instanceof ProviderResponseException
+                || failure instanceof ProviderExchangeClient.ResponseLimitExceededException) {
             return error(command, ErrorCode.PROVIDER_RESPONSE_INVALID, false);
         }
         return error(command, ErrorCode.CONNECTION_FAILED, false);
@@ -242,6 +297,18 @@ public final class OpenAiChatCompletionsAdapter {
         if (!condition) {
             throw new LocalValidationException();
         }
+    }
+
+    private static Duration remainingDuration(long deadlineNanos) {
+        long remainingNanos = deadlineNanos - System.nanoTime();
+        return remainingNanos > 0 ? Duration.ofNanos(remainingNanos) : null;
+    }
+
+    private static Mono<Void> deadlineSignal(Duration remaining) {
+        if (remaining == null) {
+            return Mono.error(new RequestDeadlineExceededException());
+        }
+        return Mono.delay(remaining).then(Mono.error(new RequestDeadlineExceededException()));
     }
 
     private static class SafeAdapterException extends RuntimeException {
@@ -276,5 +343,8 @@ public final class OpenAiChatCompletionsAdapter {
         private ConnectionAttemptFailure() {
             super(ErrorCode.CONNECTION_FAILED, true, true);
         }
+    }
+
+    private static final class RequestDeadlineExceededException extends SafeAdapterException {
     }
 }

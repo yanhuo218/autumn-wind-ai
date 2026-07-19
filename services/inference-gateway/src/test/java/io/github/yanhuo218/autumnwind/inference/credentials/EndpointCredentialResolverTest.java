@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.BaseSubscriber;
+import org.reactivestreams.Subscription;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -15,6 +17,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -67,15 +71,15 @@ class EndpointCredentialResolverTest {
     }
 
     @Test
-    void Mono取消时清零同一数组() {
+    void Mono取消时清零同一数组() throws InterruptedException {
         byte[] plaintext = placeholderPlaintext();
         EndpointCredentialResolver resolver = new EndpointCredentialResolver(new CapturingSecretStore(plaintext));
 
         Disposable subscription = resolver.withCredential(target(), credential -> Mono.never()).subscribe();
-        assertFalse(allZero(plaintext));
+        assertTrue(awaitCondition(() -> !allZero(plaintext)));
         subscription.dispose();
 
-        assertArrayEquals(ZEROES, plaintext);
+        assertTrue(awaitCondition(() -> allZero(plaintext)));
     }
 
     @Test
@@ -94,7 +98,7 @@ class EndpointCredentialResolverTest {
     }
 
     @Test
-    void Flux取消或断开时清零同一数组() {
+    void Flux取消或断开时清零同一数组() throws InterruptedException {
         byte[] plaintext = placeholderPlaintext();
         EndpointCredentialResolver resolver = new EndpointCredentialResolver(new CapturingSecretStore(plaintext));
 
@@ -102,11 +106,11 @@ class EndpointCredentialResolverTest {
         Disposable subscription = resolver.withCredentialFlux(target(),
                         credential -> Flux.concat(Flux.just("first"), Flux.never()))
                 .subscribe(received::set);
-        assertEquals("first", received.get());
+        assertTrue(awaitCondition(() -> "first".equals(received.get())));
         assertFalse(allZero(plaintext));
         subscription.dispose();
 
-        assertArrayEquals(ZEROES, plaintext);
+        assertTrue(awaitCondition(() -> allZero(plaintext)));
     }
 
     @Test
@@ -148,6 +152,54 @@ class EndpointCredentialResolverTest {
         assertArrayEquals(ZEROES, plaintext);
     }
 
+    @Test
+    void 取消慢解密后晚到凭据仍会清零() throws Exception {
+        byte[] plaintext = placeholderPlaintext();
+        CountDownLatch decryptStarted = new CountDownLatch(1);
+        CountDownLatch allowReturn = new CountDownLatch(1);
+        CountDownLatch decryptReturned = new CountDownLatch(1);
+        EndpointCredentialResolver resolver = new EndpointCredentialResolver(new SecretStore() {
+            @Override
+            public EncryptedSecret encrypt(byte[] source, SecretContext context) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public byte[] decrypt(EncryptedSecret encryptedSecret, SecretContext context) {
+                decryptStarted.countDown();
+                try {
+                    allowReturn.await(2, TimeUnit.SECONDS);
+                    return plaintext;
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    return plaintext;
+                } finally {
+                    decryptReturned.countDown();
+                }
+            }
+        });
+        AtomicReference<Subscription> subscription = new AtomicReference<>();
+        Thread subscriber = new Thread(() -> resolver.withCredentialFlux(target(), credential -> Flux.never())
+                .subscribe(new BaseSubscriber<>() {
+                    @Override
+                    protected void hookOnSubscribe(Subscription actual) {
+                        subscription.set(actual);
+                        request(Long.MAX_VALUE);
+                    }
+                }));
+        subscriber.start();
+
+        assertTrue(decryptStarted.await(2, TimeUnit.SECONDS));
+        while (subscription.get() == null) {
+            Thread.onSpinWait();
+        }
+        subscription.get().cancel();
+        allowReturn.countDown();
+
+        assertTrue(decryptReturned.await(2, TimeUnit.SECONDS));
+        assertTrue(awaitCondition(() -> allZero(plaintext)));
+    }
+
     private static InferenceTarget target() {
         return new InferenceTarget(
                 OWNER_ID,
@@ -182,6 +234,14 @@ class EndpointCredentialResolverTest {
             }
         }
         return true;
+    }
+
+    private static boolean awaitCondition(java.util.function.BooleanSupplier condition) throws InterruptedException {
+        long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (!condition.getAsBoolean() && System.nanoTime() < deadlineNanos) {
+            Thread.sleep(10);
+        }
+        return condition.getAsBoolean();
     }
 
     private static final class CapturingSecretStore implements SecretStore {

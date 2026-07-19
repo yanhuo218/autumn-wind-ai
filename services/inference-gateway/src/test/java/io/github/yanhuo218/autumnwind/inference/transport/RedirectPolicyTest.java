@@ -81,7 +81,7 @@ class RedirectPolicyTest {
         ReactorNettyProviderExchangeClient client = new ReactorNettyProviderExchangeClient(policy, attempt);
         ProviderRequest request = request();
 
-        List<ProviderFrame> frames = client.exchange(initial, request).collectList().block(Duration.ofSeconds(2));
+        List<ProviderFrame> frames = client.exchange(initial, request, limits()).collectList().block(Duration.ofSeconds(2));
 
         assertEquals(1, frames.size());
         assertEquals(200, frames.getFirst().status());
@@ -111,7 +111,7 @@ class RedirectPolicyTest {
             int sequence = dnsCount.incrementAndGet();
             return List.of(sequence % 2 == 1 ? ipv4(11, 0, 0, 1) : ipv4(10, 0, 0, 1));
         }, new PublicAddressPolicy());
-        ReactorNettyProviderExchangeClient.HttpAttempt attempt = (target, request, handler) -> {
+        ReactorNettyProviderExchangeClient.HttpAttempt attempt = (target, request, limits, handler) -> {
             attemptCount.incrementAndGet();
             return Flux.from(handler.handle(
                     redirectStatus,
@@ -141,8 +141,9 @@ class RedirectPolicyTest {
         List<InferenceEvent> events = adapter.infer(command(), target()).collectList()
                 .block(Duration.ofSeconds(2));
 
-        assertEquals(1, events.size());
-        InferenceEvent.Error error = assertInstanceOf(InferenceEvent.Error.class, events.getFirst());
+        assertEquals(2, events.size());
+        assertInstanceOf(InferenceEvent.Start.class, events.getFirst());
+        InferenceEvent.Error error = assertInstanceOf(InferenceEvent.Error.class, events.getLast());
         assertEquals(InferenceEvent.ErrorCode.TARGET_REJECTED, error.code());
         assertFalse(error.retryable());
         assertEquals(1, attemptCount.get());
@@ -167,7 +168,7 @@ class RedirectPolicyTest {
 
         TargetPolicyException error = org.junit.jupiter.api.Assertions.assertThrows(
                 TargetPolicyException.class,
-                () -> client.exchange(initial, request()).blockLast());
+                () -> client.exchange(initial, request(), limits()).blockLast());
 
         assertEquals("目标地址不是公网地址。", error.getMessage());
         assertNull(error.getCause());
@@ -180,7 +181,7 @@ class RedirectPolicyTest {
     void 拒绝307和308之外的所有重定向状态(int status) throws Exception {
         Fixture fixture = fixture(response(status, "/v1/next"));
 
-        assertRejected(fixture.client.exchange(fixture.initial, request()));
+        assertRejected(fixture.client.exchange(fixture.initial, request(), limits()));
 
         assertEquals(1, fixture.attempt.attemptCount());
         assertEquals(1, fixture.validationCount.get());
@@ -192,7 +193,7 @@ class RedirectPolicyTest {
         Fixture fixture = fixture(new ResponseSpec(307, "https://other.invalid/v1/next",
                 Flux.<ProviderFrame>never().doOnCancel(cancellationCount::incrementAndGet)));
 
-        assertRejected(fixture.client.exchange(fixture.initial, request()));
+        assertRejected(fixture.client.exchange(fixture.initial, request(), limits()));
 
         assertEquals(1, fixture.attempt.attemptCount());
         assertEquals(1, fixture.validationCount.get());
@@ -203,7 +204,7 @@ class RedirectPolicyTest {
     void 拒绝HTTPS降级() throws Exception {
         Fixture fixture = fixture(response(308, "http://provider.invalid/v1/next"));
 
-        assertRejected(fixture.client.exchange(fixture.initial, request()));
+        assertRejected(fixture.client.exchange(fixture.initial, request(), limits()));
 
         assertEquals(1, fixture.attempt.attemptCount());
         assertEquals(1, fixture.validationCount.get());
@@ -214,7 +215,7 @@ class RedirectPolicyTest {
     void 拒绝缺失或非法Location(String location) throws Exception {
         Fixture fixture = fixture(response(307, location));
 
-        assertRejected(fixture.client.exchange(fixture.initial, request()));
+        assertRejected(fixture.client.exchange(fixture.initial, request(), limits()));
 
         assertEquals(1, fixture.attempt.attemptCount());
         assertEquals(1, fixture.validationCount.get());
@@ -229,7 +230,7 @@ class RedirectPolicyTest {
                 response(308, "/v1/four")
         );
 
-        assertRejected(fixture.client.exchange(fixture.initial, request()));
+        assertRejected(fixture.client.exchange(fixture.initial, request(), limits()));
 
         assertEquals(4, fixture.attempt.attemptCount());
         assertEquals(4, fixture.validationCount.get());
@@ -328,6 +329,10 @@ class RedirectPolicyTest {
         );
     }
 
+    private static ProviderExchangeLimits limits() {
+        return ProviderExchangeLimits.forTargetTimeoutSeconds(30);
+    }
+
     private static ProviderFrame frame(int status, String body) {
         return new ProviderFrame(status, body.getBytes(StandardCharsets.US_ASCII));
     }
@@ -367,6 +372,7 @@ class RedirectPolicyTest {
         public Flux<ProviderFrame> exchange(
                 ValidatedTarget target,
                 ProviderRequest request,
+                ProviderExchangeLimits limits,
                 ReactorNettyProviderExchangeClient.ResponseHandler handler
         ) {
             events.add("attempt:" + target.uri());

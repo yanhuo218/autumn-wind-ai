@@ -16,7 +16,7 @@ public record ChatInferenceCommand(
         String correlationId
 ) {
 
-    private static final Pattern CORRELATION_ID_PATTERN = Pattern.compile("[A-Za-z0-9._-]{1,128}");
+    private static final Pattern CORRELATION_ID_PATTERN = Pattern.compile("[A-Za-z0-9._-]{16,64}");
 
     public ChatInferenceCommand {
         Objects.requireNonNull(tenantId, "租户标识不能为空。");

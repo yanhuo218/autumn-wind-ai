@@ -99,7 +99,7 @@ public sealed interface InferenceEvent permits
         public Error {
             Objects.requireNonNull(code, "错误码不能为空。");
             Objects.requireNonNull(correlationId, "关联标识不能为空。");
-            if (!correlationId.matches("[A-Za-z0-9._-]{1,128}")) {
+            if (!correlationId.matches("[A-Za-z0-9._-]{16,64}")) {
                 throw new IllegalArgumentException("关联标识不合法。");
             }
         }

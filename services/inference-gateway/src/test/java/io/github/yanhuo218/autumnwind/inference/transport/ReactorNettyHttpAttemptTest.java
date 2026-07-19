@@ -6,6 +6,8 @@ import io.github.yanhuo218.autumnwind.inference.security.OutboundTargetPolicy;
 import io.github.yanhuo218.autumnwind.inference.security.PublicAddressPolicy;
 import io.github.yanhuo218.autumnwind.inference.security.ValidatedTarget;
 import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslHandler;
@@ -18,8 +20,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.Disposable;
 import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
+import io.netty.util.ResourceLeakDetector;
 
 import java.io.InputStream;
 import java.net.InetAddress;
@@ -33,7 +37,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.ExtendedSSLSession;
@@ -42,6 +50,7 @@ import javax.net.ssl.SNIHostName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReactorNettyHttpAttemptTest {
 
@@ -53,6 +62,10 @@ class ReactorNettyHttpAttemptTest {
     private static final AtomicInteger FOLLOWED_COUNT = new AtomicInteger();
     private static final List<String> AUTHORIZATIONS = new CopyOnWriteArrayList<>();
     private static final List<String> SNI_HOSTS = new CopyOnWriteArrayList<>();
+    private static final AtomicBoolean LIVE_LIMIT_SOURCE_CANCELLED = new AtomicBoolean();
+    private static final AtomicBoolean LIVE_CANCEL_SOURCE_CANCELLED = new AtomicBoolean();
+    private static final AtomicReference<ByteBuf> LIVE_CANCEL_BUFFER = new AtomicReference<>();
+    private static final AtomicReference<CountDownLatch> LIVE_CANCEL_LATCH = new AtomicReference<>();
 
     @TempDir
     static Path temporaryDirectory;
@@ -87,6 +100,31 @@ class ReactorNettyHttpAttemptTest {
                     if ("/disconnect".equals(request.uri())) {
                         request.withConnection(connection -> connection.dispose());
                         return Mono.never();
+                    }
+                    if ("/chunked-idle".equals(request.uri())) {
+                        return response.sendString(Flux.just("first-", "second")
+                                .delayElements(Duration.ofMillis(120)));
+                    }
+                    if ("/headers-delayed".equals(request.uri())) {
+                        return response.sendString(Mono.delay(Duration.ofMillis(180))
+                                .thenReturn("late-header"));
+                    }
+                    if ("/limit-total-live".equals(request.uri())) {
+                        LIVE_LIMIT_SOURCE_CANCELLED.set(false);
+                        return response.sendByteArray(Flux.interval(Duration.ofMillis(10))
+                                .take(17)
+                                .map(ignored -> new byte[1_048_576])
+                                .doOnCancel(() -> LIVE_LIMIT_SOURCE_CANCELLED.set(true)));
+                    }
+                    if ("/cancel-live".equals(request.uri())) {
+                        LIVE_CANCEL_SOURCE_CANCELLED.set(false);
+                        ByteBuf buffer = Unpooled.buffer(1024).writeZero(1024);
+                        LIVE_CANCEL_BUFFER.set(buffer);
+                        return response.send(Flux.concat(Mono.just(buffer), Mono.<ByteBuf>never())
+                                .doOnCancel(() -> {
+                                    LIVE_CANCEL_SOURCE_CANCELLED.set(true);
+                                    LIVE_CANCEL_LATCH.get().countDown();
+                                }));
                     }
                     if (request.uri().startsWith("/empty-")) {
                         int status = Integer.parseInt(request.uri().substring("/empty-".length()));
@@ -181,13 +219,128 @@ class ReactorNettyHttpAttemptTest {
         assertEquals(requestsBefore + 1, REQUEST_COUNT.get());
     }
 
+    @Test
+    void 单帧超过一MiB时取消上游并返回稳定错误() {
+        AtomicBoolean cancelled = new AtomicBoolean();
+        ReactorNettyProviderExchangeClient limitedClient = clientWithBody(
+                Flux.just(new ProviderFrame(200, new byte[1_048_577]))
+                        .doOnCancel(() -> cancelled.set(true)));
+
+        RuntimeException error = assertThrows(RuntimeException.class,
+                () -> exchange(limitedClient, "/limit-frame").blockLast(Duration.ofSeconds(5)));
+
+        assertEquals("服务商响应超过资源限制。", error.getMessage());
+        assertTrue(cancelled.get());
+    }
+
+    @Test
+    void 累计响应超过十六MiB时取消上游并返回稳定错误() {
+        AtomicBoolean cancelled = new AtomicBoolean();
+        ReactorNettyProviderExchangeClient limitedClient = clientWithBody(
+                Flux.just(
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1_048_576]),
+                                new ProviderFrame(200, new byte[1]))
+                        .doOnCancel(() -> cancelled.set(true)));
+
+        RuntimeException error = assertThrows(RuntimeException.class,
+                () -> exchange(limitedClient, "/limit-total").blockLast(Duration.ofSeconds(5)));
+
+        assertEquals("服务商响应超过资源限制。", error.getMessage());
+        assertTrue(cancelled.get());
+    }
+
+    @Test
+    void 响应头及时到达后body间隔大于header但小于idle仍成功() {
+        List<ProviderFrame> frames = exchange(client, "/chunked-idle",
+                new ProviderExchangeLimits(Duration.ofMillis(60), Duration.ofMillis(300),
+                        1_048_576, 16_777_216L))
+                .collectList().block(Duration.ofSeconds(3));
+
+        assertEquals("first-second", body(frames));
+    }
+
+    @Test
+    void 响应头超过headerTimeout时失败() {
+        RuntimeException error = assertThrows(RuntimeException.class,
+                () -> exchange(client, "/headers-delayed",
+                        new ProviderExchangeLimits(Duration.ofMillis(60), Duration.ofMillis(300),
+                                1_048_576, 16_777_216L))
+                        .blockLast(Duration.ofSeconds(3)));
+
+        assertEquals("服务商请求失败。", error.getMessage());
+    }
+
+    @Test
+    void 真实分块响应累计超限时取消服务端源() {
+        ResourceLeakDetector.Level originalLevel = ResourceLeakDetector.getLevel();
+        try {
+            ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID);
+            assertEquals(ResourceLeakDetector.Level.PARANOID, ResourceLeakDetector.getLevel());
+            RuntimeException error = assertThrows(RuntimeException.class,
+                    () -> exchange("/limit-total-live").blockLast(Duration.ofSeconds(5)));
+
+            assertEquals("服务商响应超过资源限制。", error.getMessage());
+            assertTrue(LIVE_LIMIT_SOURCE_CANCELLED.get());
+        } finally {
+            ResourceLeakDetector.setLevel(originalLevel);
+        }
+    }
+
+    @Test
+    void 真实Netty连接取消会取消服务端源并释放入站buffer() throws InterruptedException {
+        CountDownLatch received = new CountDownLatch(1);
+        CountDownLatch cancelled = new CountDownLatch(1);
+        LIVE_CANCEL_LATCH.set(cancelled);
+        Disposable subscription = exchange("/cancel-live").subscribe(frame -> received.countDown());
+
+        assertTrue(received.await(2, TimeUnit.SECONDS));
+        subscription.dispose();
+
+        assertTrue(cancelled.await(2, TimeUnit.SECONDS));
+        assertTrue(LIVE_CANCEL_SOURCE_CANCELLED.get());
+        assertEquals(0, LIVE_CANCEL_BUFFER.get().refCnt());
+    }
+
     private static Flux<ProviderFrame> exchange(String path) {
+        return exchange(client, path);
+    }
+
+    private static Flux<ProviderFrame> exchange(ReactorNettyProviderExchangeClient exchangeClient, String path) {
+        return exchange(exchangeClient, path, ProviderExchangeLimits.forTargetTimeoutSeconds(30));
+    }
+
+    private static Flux<ProviderFrame> exchange(
+            ReactorNettyProviderExchangeClient exchangeClient,
+            String path,
+            ProviderExchangeLimits limits
+    ) {
         URI uri = URI.create("https://" + PROVIDER_HOST + ":" + server.port() + path);
         ValidatedTarget target = new ValidatedTarget(uri, List.of(loopback));
         ProviderRequest request = new ProviderRequest(
                 "PLACEHOLDER_API_KEY_BYTES".getBytes(StandardCharsets.US_ASCII),
                 "request-placeholder".getBytes(StandardCharsets.US_ASCII));
-        return client.exchange(target, request);
+        return exchangeClient.exchange(target, request, limits);
+    }
+
+    private static ReactorNettyProviderExchangeClient clientWithBody(Flux<ProviderFrame> body) {
+        OutboundTargetPolicy policy = new OutboundTargetPolicy(host -> List.of(loopback), new PublicAddressPolicy());
+        return new ReactorNettyProviderExchangeClient(policy,
+                (target, request, limits, handler) -> Flux.from(handler.handle(200, null, body)));
     }
 
     private static String body(List<ProviderFrame> frames) {

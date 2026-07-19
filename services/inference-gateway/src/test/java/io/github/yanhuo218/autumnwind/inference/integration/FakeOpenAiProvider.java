@@ -2,6 +2,7 @@ package io.github.yanhuo218.autumnwind.inference.integration;
 
 import io.github.yanhuo218.autumnwind.inference.security.ValidatedTarget;
 import io.github.yanhuo218.autumnwind.inference.transport.ProviderExchangeClient;
+import io.github.yanhuo218.autumnwind.inference.transport.ProviderExchangeLimits;
 import io.github.yanhuo218.autumnwind.inference.transport.ProviderFrame;
 import io.github.yanhuo218.autumnwind.inference.transport.ProviderRequest;
 import reactor.core.publisher.Flux;
@@ -38,7 +39,11 @@ final class FakeOpenAiProvider implements ProviderExchangeClient {
     }
 
     @Override
-    public Flux<ProviderFrame> exchange(ValidatedTarget target, ProviderRequest request) {
+    public Flux<ProviderFrame> exchange(
+            ValidatedTarget target,
+            ProviderRequest request,
+            ProviderExchangeLimits limits
+    ) {
         callCount.incrementAndGet();
         lastTarget = Objects.requireNonNull(target, "校验后的目标不能为空。");
         Objects.requireNonNull(request, "Provider 请求不能为空。");

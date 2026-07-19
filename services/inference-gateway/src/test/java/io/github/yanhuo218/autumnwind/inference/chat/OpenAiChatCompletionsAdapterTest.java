@@ -17,13 +17,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import reactor.core.Disposable;
+import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
+import org.reactivestreams.Subscription;
 
 import java.net.InetAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -32,7 +35,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -119,7 +125,7 @@ class OpenAiChatCompletionsAdapterTest {
         AtomicReference<URI> capturedUri = new AtomicReference<>();
         AtomicInteger dnsCount = new AtomicInteger();
         TrackingSecretStore secretStore = new TrackingSecretStore();
-        ProviderExchangeClient client = (validated, request) -> {
+        ProviderExchangeClient client = (validated, request, limits) -> {
             capturedUri.set(validated.uri());
             capturedRequest.set(request);
             return Flux.just(frame(200, "data: [DONE]\n\n"));
@@ -163,7 +169,7 @@ class OpenAiChatCompletionsAdapterTest {
     @Test
     void 非流请求省略streamOptions与未提供的可选参数() throws Exception {
         AtomicReference<ProviderRequest> request = new AtomicReference<>();
-        ProviderExchangeClient client = (validated, actual) -> {
+        ProviderExchangeClient client = (validated, actual, limits) -> {
             request.set(actual);
             return Flux.just(frame(200, "{\"choices\":[{\"message\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}"));
         };
@@ -185,7 +191,7 @@ class OpenAiChatCompletionsAdapterTest {
     @Test
     void 追加路径时保留HTTPSAuthority和编码后的基路径() {
         AtomicReference<URI> capturedUri = new AtomicReference<>();
-        ProviderExchangeClient client = (validated, request) -> {
+        ProviderExchangeClient client = (validated, request, limits) -> {
             capturedUri.set(validated.uri());
             return Flux.just(frame(200, "data: [DONE]\n\n"));
         };
@@ -201,7 +207,7 @@ class OpenAiChatCompletionsAdapterTest {
     @Test
     void 拒绝租户模型角色参数和能力不匹配且不访问网络() {
         AtomicInteger exchanges = new AtomicInteger();
-        ProviderExchangeClient client = (validated, request) -> {
+        ProviderExchangeClient client = (validated, request, limits) -> {
             exchanges.incrementAndGet();
             return Flux.error(new AssertionError("不应访问网络"));
         };
@@ -249,7 +255,7 @@ class OpenAiChatCompletionsAdapterTest {
         AtomicInteger attempts = new AtomicInteger();
         AtomicInteger dnsCount = new AtomicInteger();
         TrackingSecretStore secretStore = new TrackingSecretStore();
-        ProviderExchangeClient client = (validated, request) -> {
+        ProviderExchangeClient client = (validated, request, limits) -> {
             attempts.incrementAndGet();
             return Flux.just(frame(status, "provider-error-body-placeholder"));
         };
@@ -274,7 +280,7 @@ class OpenAiChatCompletionsAdapterTest {
         AtomicInteger attempts = new AtomicInteger();
         AtomicInteger dnsCount = new AtomicInteger();
         TrackingSecretStore secretStore = new TrackingSecretStore();
-        ProviderExchangeClient client = (validated, request) -> {
+        ProviderExchangeClient client = (validated, request, limits) -> {
             attempts.incrementAndGet();
             return Flux.just(new ProviderFrame(status, new byte[0]));
         };
@@ -288,8 +294,9 @@ class OpenAiChatCompletionsAdapterTest {
             assertInstanceOf(InferenceEvent.Start.class, events.get(0));
             error = assertInstanceOf(InferenceEvent.Error.class, events.get(1));
         } else {
-            assertEquals(1, events.size());
-            error = assertInstanceOf(InferenceEvent.Error.class, events.get(0));
+            assertEquals(2, events.size());
+            assertInstanceOf(InferenceEvent.Start.class, events.get(0));
+            error = assertInstanceOf(InferenceEvent.Error.class, events.get(1));
         }
         assertEquals(code, error.code().name());
         assertEquals(retryable, error.retryable());
@@ -303,7 +310,7 @@ class OpenAiChatCompletionsAdapterTest {
     void 首帧前连接失败最多重试两次且每次重新校验() {
         AtomicInteger attempts = new AtomicInteger();
         AtomicInteger dnsCount = new AtomicInteger();
-        ProviderExchangeClient client = (validated, request) -> {
+        ProviderExchangeClient client = (validated, request, limits) -> {
             attempts.incrementAndGet();
             return Flux.error(new IllegalStateException("connection-sensitive-placeholder"));
         };
@@ -321,7 +328,7 @@ class OpenAiChatCompletionsAdapterTest {
     void SSRF策略拒绝不重试也不调用Provider() {
         AtomicInteger exchanges = new AtomicInteger();
         AtomicInteger dnsCount = new AtomicInteger();
-        ProviderExchangeClient client = (validated, request) -> {
+        ProviderExchangeClient client = (validated, request, limits) -> {
             exchanges.incrementAndGet();
             return Flux.empty();
         };
@@ -339,7 +346,7 @@ class OpenAiChatCompletionsAdapterTest {
         AtomicInteger exchanges = new AtomicInteger();
         AtomicInteger dnsCount = new AtomicInteger();
         TrackingSecretStore secretStore = new TrackingSecretStore();
-        ProviderExchangeClient client = (validated, request) -> {
+        ProviderExchangeClient client = (validated, request, limits) -> {
             exchanges.incrementAndGet();
             return Flux.error(new TargetPolicyException("异步目标策略占位诊断"));
         };
@@ -370,7 +377,7 @@ class OpenAiChatCompletionsAdapterTest {
         };
         AtomicInteger dnsCount = new AtomicInteger();
 
-        List<InferenceEvent> events = adapter((validated, request) -> Flux.empty(),
+        List<InferenceEvent> events = adapter((validated, request, limits) -> Flux.empty(),
                         failingStore, dnsCount, false)
                 .infer(command(true), target(defaultCapabilities())).collectList().block();
 
@@ -382,7 +389,7 @@ class OpenAiChatCompletionsAdapterTest {
     @Test
     void 首个2xx后才发start且流开始后的错误只输出一个error不重试() {
         AtomicInteger attempts = new AtomicInteger();
-        ProviderExchangeClient client = (validated, request) -> {
+        ProviderExchangeClient client = (validated, request, limits) -> {
             attempts.incrementAndGet();
             return Flux.concat(
                     Flux.just(frame(200, "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n")),
@@ -407,7 +414,7 @@ class OpenAiChatCompletionsAdapterTest {
 
     @Test
     void 状态2xx的畸形响应在start后输出安全响应错误() {
-        ProviderExchangeClient client = (validated, request) -> Flux.just(frame(200, "data: {bad-json}\n\n"));
+        ProviderExchangeClient client = (validated, request, limits) -> Flux.just(frame(200, "data: {bad-json}\n\n"));
 
         List<InferenceEvent> events = adapter(client).infer(command(true), target(defaultCapabilities()))
                 .collectList().block();
@@ -420,25 +427,205 @@ class OpenAiChatCompletionsAdapterTest {
     }
 
     @Test
-    void 取消完整流时凭据数组立即清零() {
+    void 取消完整流时凭据数组立即清零() throws InterruptedException {
         TrackingSecretStore secretStore = new TrackingSecretStore();
         AtomicReference<byte[]> credentialBytes = new AtomicReference<>();
-        ProviderExchangeClient client = (validated, request) -> {
+        ProviderExchangeClient client = (validated, request, limits) -> {
             credentialBytes.set(request.apiKey());
             return Flux.concat(
                     Flux.just(frame(200, "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n")),
                     Flux.never());
         };
         List<InferenceEvent> received = new ArrayList<>();
+        CountDownLatch receivedEvents = new CountDownLatch(2);
 
         Disposable subscription = adapter(client, secretStore, new AtomicInteger(), false)
                 .infer(command(true), target(defaultCapabilities()))
-                .subscribe(received::add);
+                .subscribe(event -> {
+                    received.add(event);
+                    receivedEvents.countDown();
+                });
 
+        assertTrue(receivedEvents.await(2, TimeUnit.SECONDS));
         assertEquals(2, received.size());
         assertFalse(allZero(credentialBytes.get()));
         subscription.dispose();
         assertTrue(allZero(credentialBytes.get()));
+    }
+
+    @Test
+    void 仅消费同步start后取消不会触达Provider() {
+        AtomicInteger exchanges = new AtomicInteger();
+        List<InferenceEvent> received = new ArrayList<>();
+        ProviderExchangeClient client = (validated, request, limits) -> {
+            exchanges.incrementAndGet();
+            return Flux.never();
+        };
+
+        adapter(client).infer(command(true), target(defaultCapabilities()))
+                .subscribe(new BaseSubscriber<>() {
+                    @Override
+                    protected void hookOnSubscribe(Subscription subscription) {
+                        request(1);
+                    }
+
+                    @Override
+                    protected void hookOnNext(InferenceEvent event) {
+                        received.add(event);
+                        cancel();
+                    }
+                });
+
+        assertEquals(1, received.size());
+        assertInstanceOf(InferenceEvent.Start.class, received.getFirst());
+        assertEquals(0, exchanges.get());
+    }
+
+    @Test
+    void 消费服务商事件后取消会dispose上游并关闭凭据() throws InterruptedException {
+        TrackingSecretStore secretStore = new TrackingSecretStore();
+        AtomicReference<byte[]> credentialBytes = new AtomicReference<>();
+        AtomicBoolean disposed = new AtomicBoolean();
+        ProviderExchangeClient client = (validated, request, limits) -> {
+            credentialBytes.set(request.apiKey());
+            return Flux.concat(
+                            Flux.just(frame(200, "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n")),
+                            Flux.never())
+                    .doOnCancel(() -> disposed.set(true));
+        };
+        List<InferenceEvent> received = new ArrayList<>();
+        CountDownLatch receivedEvents = new CountDownLatch(2);
+
+        Disposable subscription = adapter(client, secretStore, new AtomicInteger(), false)
+                .infer(command(true), target(defaultCapabilities()))
+                .subscribe(event -> {
+                    received.add(event);
+                    receivedEvents.countDown();
+                });
+
+        assertTrue(receivedEvents.await(2, TimeUnit.SECONDS));
+        assertEquals(2, received.size());
+        assertFalse(allZero(credentialBytes.get()));
+        subscription.dispose();
+
+        assertTrue(disposed.get());
+        assertTrue(allZero(credentialBytes.get()));
+        assertTrue(secretStore.allReleased());
+    }
+
+    @Test
+    void 终态后晚到帧不会产生第二个终态或文本事件() {
+        ProviderExchangeClient client = (validated, request, limits) -> Flux.just(
+                frame(200, "data: [DONE]\n\n"),
+                frame(200, "data: {\"choices\":[{\"delta\":{\"content\":\"late\"}}]}\n\n"));
+
+        List<InferenceEvent> events = adapter(client).infer(command(true), target(defaultCapabilities()))
+                .collectList().block();
+
+        assertEquals(2, events.size());
+        assertInstanceOf(InferenceEvent.Start.class, events.get(0));
+        assertInstanceOf(InferenceEvent.Done.class, events.get(1));
+    }
+
+    @Test
+    void 服务商响应超限不重试并输出稳定不可重试错误() {
+        AtomicInteger attempts = new AtomicInteger();
+        ProviderExchangeClient client = (validated, request, limits) -> {
+            attempts.incrementAndGet();
+            return Flux.error(new ProviderExchangeClient.ResponseLimitExceededException());
+        };
+
+        List<InferenceEvent> events = adapter(client).infer(command(true), target(defaultCapabilities()))
+                .collectList().block();
+
+        assertEquals(1, attempts.get());
+        InferenceEvent.Error error = assertInstanceOf(InferenceEvent.Error.class, events.getLast());
+        assertEquals(InferenceEvent.ErrorCode.PROVIDER_RESPONSE_INVALID, error.code());
+        assertFalse(error.retryable());
+    }
+
+    @Test
+    void 持续帧不能把端点总超时重置为逐帧空闲超时() {
+        AtomicInteger attempts = new AtomicInteger();
+        ProviderExchangeClient client = (validated, request, limits) -> {
+            attempts.incrementAndGet();
+            return Flux.interval(Duration.ofMillis(100))
+                    .map(ignored -> frame(200,
+                            "data: {\"choices\":[{\"delta\":{\"content\":\"tick\"}}]}\n\n"));
+        };
+
+        List<InferenceEvent> events = adapter(client).infer(command(true), target(defaultCapabilities(), 1))
+                .collectList().block(Duration.ofSeconds(3));
+
+        assertEquals(1, attempts.get());
+        InferenceEvent.Error error = assertInstanceOf(InferenceEvent.Error.class, events.getLast());
+        assertEquals(InferenceEvent.ErrorCode.CONNECTION_FAILED, error.code());
+        assertFalse(error.retryable());
+    }
+
+    @Test
+    void 重试共享端点总超时deadline() {
+        AtomicInteger attempts = new AtomicInteger();
+        ProviderExchangeClient client = (validated, request, limits) -> {
+            if (attempts.incrementAndGet() == 1) {
+                return Flux.<ProviderFrame>error(new IllegalStateException("first-attempt-placeholder"))
+                        .delaySubscription(Duration.ofMillis(600));
+            }
+            return Flux.never();
+        };
+        long started = System.nanoTime();
+
+        List<InferenceEvent> events = adapter(client).infer(command(true), target(defaultCapabilities(), 1))
+                .collectList().block(Duration.ofSeconds(3));
+        long elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
+
+        assertEquals(2, attempts.get());
+        assertTrue(elapsedMillis < 1_300, "重试不得获得新的完整超时窗口。");
+        InferenceEvent.Error error = assertInstanceOf(InferenceEvent.Error.class, events.getLast());
+        assertEquals(InferenceEvent.ErrorCode.CONNECTION_FAILED, error.code());
+        assertFalse(error.retryable());
+    }
+
+    @Test
+    void 慢解密超过总时限时Provider未调用且晚到凭据清零() throws InterruptedException {
+        AtomicInteger exchanges = new AtomicInteger();
+        byte[] plaintext = PLACEHOLDER_KEY.getBytes(StandardCharsets.US_ASCII);
+        CountDownLatch decryptReturned = new CountDownLatch(1);
+        SecretStore slowStore = slowSecretStore(plaintext, decryptReturned);
+        ProviderExchangeClient client = (validated, request, limits) -> {
+            exchanges.incrementAndGet();
+            return Flux.never();
+        };
+
+        List<InferenceEvent> events = adapter(client, slowStore, new AtomicInteger(), false)
+                .infer(command(true), target(defaultCapabilities(), 1))
+                .collectList().block(Duration.ofSeconds(3));
+
+        assertEquals(0, exchanges.get());
+        assertStableDeadlineError(events);
+        assertTrue(decryptReturned.await(2, TimeUnit.SECONDS));
+        assertTrue(awaitCondition(() -> allZero(plaintext)));
+    }
+
+    @Test
+    void 慢DNS超过总时限时Provider未调用且凭据清零() throws InterruptedException {
+        AtomicInteger exchanges = new AtomicInteger();
+        CountDownLatch resolverReturned = new CountDownLatch(1);
+        TrackingSecretStore secretStore = new TrackingSecretStore();
+        ProviderExchangeClient client = (validated, request, limits) -> {
+            exchanges.incrementAndGet();
+            return Flux.never();
+        };
+
+        List<InferenceEvent> events = adapter(client, secretStore, new AtomicInteger(), false,
+                Duration.ofMillis(1_500), resolverReturned)
+                .infer(command(true), target(defaultCapabilities(), 1))
+                .collectList().block(Duration.ofSeconds(3));
+
+        assertEquals(0, exchanges.get());
+        assertStableDeadlineError(events);
+        assertTrue(resolverReturned.await(2, TimeUnit.SECONDS));
+        assertTrue(awaitCondition(secretStore::allReleased));
     }
 
     @Test
@@ -447,7 +634,7 @@ class OpenAiChatCompletionsAdapterTest {
                 TENANT_ID, MODEL_ID,
                 List.of(new ChatInferenceCommand.Message("user", "sensitive-message-placeholder")),
                 "sensitive-system-placeholder", null, null, true, CORRELATION_ID);
-        ProviderExchangeClient client = (validated, request) -> Flux.just(frame(401, "sensitive-provider-placeholder"));
+        ProviderExchangeClient client = (validated, request, limits) -> Flux.just(frame(401, "sensitive-provider-placeholder"));
 
         List<InferenceEvent> events = adapter(client).infer(command, target(defaultCapabilities())).collectList().block();
 
@@ -455,7 +642,7 @@ class OpenAiChatCompletionsAdapterTest {
         assertFalse(values.contains("sensitive-message-placeholder"));
         assertFalse(values.contains("sensitive-system-placeholder"));
         assertFalse(values.contains("sensitive-provider-placeholder"));
-        InferenceEvent.Error error = assertInstanceOf(InferenceEvent.Error.class, events.get(0));
+        InferenceEvent.Error error = assertInstanceOf(InferenceEvent.Error.class, events.getLast());
         assertEquals(CORRELATION_ID, error.correlationId());
     }
 
@@ -482,8 +669,30 @@ class OpenAiChatCompletionsAdapterTest {
             AtomicInteger dnsCount,
             boolean privateAddress
     ) {
+        return adapter(client, secretStore, dnsCount, privateAddress, Duration.ZERO, null);
+    }
+
+    private static OpenAiChatCompletionsAdapter adapter(
+            ProviderExchangeClient client,
+            SecretStore secretStore,
+            AtomicInteger dnsCount,
+            boolean privateAddress,
+            Duration resolverDelay,
+            CountDownLatch resolverReturned
+    ) {
         OutboundTargetPolicy policy = new OutboundTargetPolicy(host -> {
             dnsCount.incrementAndGet();
+            if (!resolverDelay.isZero()) {
+                try {
+                    Thread.sleep(resolverDelay);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    if (resolverReturned != null) {
+                        resolverReturned.countDown();
+                    }
+                }
+            }
             return List.of(InetAddress.getByName(privateAddress ? "10.0.0.1" : "11.0.0.1"));
         }, new PublicAddressPolicy());
         return new OpenAiChatCompletionsAdapter(
@@ -540,10 +749,22 @@ class OpenAiChatCompletionsAdapterTest {
     }
 
     private static InferenceTarget target(InferenceTarget.Capabilities capabilities) {
-        return target(capabilities, URI.create("https://provider.invalid/v1"));
+        return target(capabilities, URI.create("https://provider.invalid/v1"), 30);
+    }
+
+    private static InferenceTarget target(InferenceTarget.Capabilities capabilities, int endpointTimeoutSeconds) {
+        return target(capabilities, URI.create("https://provider.invalid/v1"), endpointTimeoutSeconds);
     }
 
     private static InferenceTarget target(InferenceTarget.Capabilities capabilities, URI endpointBaseUrl) {
+        return target(capabilities, endpointBaseUrl, 30);
+    }
+
+    private static InferenceTarget target(
+            InferenceTarget.Capabilities capabilities,
+            URI endpointBaseUrl,
+            int endpointTimeoutSeconds
+    ) {
         return new InferenceTarget(
                 TENANT_ID,
                 MODEL_ID,
@@ -552,7 +773,7 @@ class OpenAiChatCompletionsAdapterTest {
                 ENDPOINT_ID,
                 endpointBaseUrl,
                 "OPENAI_COMPATIBLE",
-                30,
+                endpointTimeoutSeconds,
                 2,
                 capabilities,
                 CREDENTIAL_ID,
@@ -579,12 +800,43 @@ class OpenAiChatCompletionsAdapterTest {
     }
 
     private static void assertError(List<InferenceEvent> events, String code, boolean retryable) {
-        assertEquals(1, events.size());
-        InferenceEvent.Error error = assertInstanceOf(InferenceEvent.Error.class, events.get(0));
+        if (events.size() == 2) {
+            assertInstanceOf(InferenceEvent.Start.class, events.getFirst());
+        } else {
+            assertEquals(1, events.size());
+        }
+        InferenceEvent.Error error = assertInstanceOf(InferenceEvent.Error.class, events.getLast());
         assertEquals("error", error.type());
         assertEquals(code, error.code().name());
         assertEquals(CORRELATION_ID, error.correlationId());
         assertEquals(retryable, error.retryable());
+    }
+
+    private static void assertStableDeadlineError(List<InferenceEvent> events) {
+        InferenceEvent.Error error = assertInstanceOf(InferenceEvent.Error.class, events.getLast());
+        assertEquals(InferenceEvent.ErrorCode.CONNECTION_FAILED, error.code());
+        assertFalse(error.retryable());
+    }
+
+    private static SecretStore slowSecretStore(byte[] plaintext, CountDownLatch decryptReturned) {
+        return new SecretStore() {
+            @Override
+            public EncryptedSecret encrypt(byte[] source, SecretContext context) {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public byte[] decrypt(EncryptedSecret encryptedSecret, SecretContext context) {
+                try {
+                    Thread.sleep(1_500);
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    decryptReturned.countDown();
+                }
+                return plaintext;
+            }
+        };
     }
 
     private static boolean allZero(byte[] value) {
@@ -594,6 +846,14 @@ class OpenAiChatCompletionsAdapterTest {
             }
         }
         return true;
+    }
+
+    private static boolean awaitCondition(java.util.function.BooleanSupplier condition) throws InterruptedException {
+        long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (!condition.getAsBoolean() && System.nanoTime() < deadlineNanos) {
+            Thread.sleep(10);
+        }
+        return condition.getAsBoolean();
     }
 
     private static final class TrackingSecretStore implements SecretStore {

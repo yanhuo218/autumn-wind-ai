@@ -4,6 +4,7 @@ import io.github.yanhuo218.autumnwind.inference.security.OutboundTargetPolicy;
 import io.github.yanhuo218.autumnwind.inference.security.TargetPolicyException;
 import io.github.yanhuo218.autumnwind.inference.security.ValidatedTarget;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelOption;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpHeaderValues;
 import io.netty.handler.ssl.SslContext;
@@ -13,18 +14,23 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.netty.http.Http11SslContextSpec;
 import reactor.netty.http.client.HttpClient;
+import reactor.netty.NettyPipeline;
 import reactor.netty.resources.ConnectionProvider;
 import reactor.netty.tcp.SslProvider;
 
 import java.net.URI;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.net.ssl.SNIHostName;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 
 public final class ReactorNettyProviderExchangeClient implements ProviderExchangeClient {
 
+    static final int CONNECT_TIMEOUT_MILLIS = 10_000;
+    static final int MAX_PROVIDER_FRAME_BYTES = 1_048_576;
+    static final long MAX_PROVIDER_RESPONSE_BYTES = 16_777_216L;
     private static final int MAX_REDIRECTS = 3;
     private static final int DEFAULT_HTTPS_PORT = 443;
     private static final String REDIRECT_REJECTED_MESSAGE = "服务商重定向被拒绝。";
@@ -44,11 +50,17 @@ public final class ReactorNettyProviderExchangeClient implements ProviderExchang
     }
 
     @Override
-    public Flux<ProviderFrame> exchange(ValidatedTarget target, ProviderRequest request) {
+    public Flux<ProviderFrame> exchange(
+            ValidatedTarget target,
+            ProviderRequest request,
+            ProviderExchangeLimits limits
+    ) {
         Objects.requireNonNull(target, "已校验目标不能为空。");
         Objects.requireNonNull(request, "服务商请求不能为空。");
-        return exchangeAttempt(target, request, 0)
+        Objects.requireNonNull(limits, "服务商响应限制不能为空。");
+        return exchangeAttempt(target, request, limits, 0)
                 .onErrorMap(error -> error instanceof ProviderExchangeException
+                        || error instanceof ProviderExchangeClient.ResponseLimitExceededException
                         || error instanceof TargetPolicyException
                         ? error
                         : new ProviderExchangeException(EXCHANGE_FAILED_MESSAGE));
@@ -57,15 +69,18 @@ public final class ReactorNettyProviderExchangeClient implements ProviderExchang
     private Flux<ProviderFrame> exchangeAttempt(
             ValidatedTarget target,
             ProviderRequest request,
+            ProviderExchangeLimits limits,
             int redirectCount
     ) {
-        return Flux.defer(() -> httpAttempt.exchange(target, request,
-                (status, location, body) -> handleResponse(target, request, redirectCount, status, location, body)));
+        return Flux.defer(() -> httpAttempt.exchange(target, request, limits,
+                (status, location, body) -> handleResponse(
+                        target, request, limits, redirectCount, status, location, limitResponse(body, limits))));
     }
 
     private Publisher<ProviderFrame> handleResponse(
             ValidatedTarget target,
             ProviderRequest request,
+            ProviderExchangeLimits limits,
             int redirectCount,
             int status,
             String location,
@@ -93,7 +108,7 @@ public final class ReactorNettyProviderExchangeClient implements ProviderExchang
                         ? error
                         : new ProviderExchangeException(EXCHANGE_FAILED_MESSAGE))
                 .flatMapMany(redirectedTarget -> sameOrigin(target.uri(), redirectedTarget.uri())
-                        ? exchangeAttempt(redirectedTarget, request, redirectCount + 1)
+                        ? exchangeAttempt(redirectedTarget, request, limits, redirectCount + 1)
                         : rejectedRedirect());
         return terminateRedirectBody(body, redirectedExchange);
     }
@@ -131,6 +146,21 @@ public final class ReactorNettyProviderExchangeClient implements ProviderExchang
                 .thenMany(continuation);
     }
 
+    private static Flux<ProviderFrame> limitResponse(Flux<ProviderFrame> body, ProviderExchangeLimits limits) {
+        return Flux.defer(() -> {
+            AtomicLong responseBytes = new AtomicLong();
+            return body.handle((frame, sink) -> {
+                int frameBytes = frame.data().length;
+                long total = responseBytes.addAndGet(frameBytes);
+                if (frameBytes > limits.maxFrameBytes() || total > limits.maxResponseBytes()) {
+                    sink.error(new ProviderExchangeClient.ResponseLimitExceededException());
+                    return;
+                }
+                sink.next(frame);
+            });
+        });
+    }
+
     static SslProvider sslProviderForHost(String host) {
         return sslProviderForHost(host, CLIENT_SSL_CONTEXT);
     }
@@ -162,7 +192,11 @@ public final class ReactorNettyProviderExchangeClient implements ProviderExchang
     @FunctionalInterface
     interface HttpAttempt {
 
-        Flux<ProviderFrame> exchange(ValidatedTarget target, ProviderRequest request, ResponseHandler handler);
+        Flux<ProviderFrame> exchange(
+                ValidatedTarget target,
+                ProviderRequest request,
+                ProviderExchangeLimits limits,
+                ResponseHandler handler);
     }
 
     @FunctionalInterface
@@ -187,6 +221,7 @@ public final class ReactorNettyProviderExchangeClient implements ProviderExchang
         public Flux<ProviderFrame> exchange(
                 ValidatedTarget target,
                 ProviderRequest request,
+                ProviderExchangeLimits limits,
                 ResponseHandler handler
         ) {
             return Flux.using(
@@ -194,6 +229,10 @@ public final class ReactorNettyProviderExchangeClient implements ProviderExchang
                     resolver -> HttpClient.create(ConnectionProvider.newConnection())
                             .followRedirect(false)
                             .disableRetry(true)
+                            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, CONNECT_TIMEOUT_MILLIS)
+                            .responseTimeout(limits.responseHeaderTimeout())
+                            .doOnResponse((response, connection) ->
+                                    connection.removeHandler(NettyPipeline.ResponseTimeoutHandler))
                             .resolver(resolver)
                             .secure(sslProviderForHost(target.uri().getHost(), sslContext))
                             .headers(headers -> {
@@ -207,11 +246,17 @@ public final class ReactorNettyProviderExchangeClient implements ProviderExchang
                             .response((response, content) -> {
                                 int status = response.status().code();
                                 String location = response.responseHeaders().get(HttpHeaderNames.LOCATION);
-                                Flux<ProviderFrame> body = content.map(buffer -> {
-                                            byte[] data = new byte[buffer.readableBytes()];
+                                Flux<ProviderFrame> body = content.<ProviderFrame>handle((buffer, reactorSink) -> {
+                                            int readableBytes = buffer.readableBytes();
+                                            if (readableBytes > limits.maxFrameBytes()) {
+                                                reactorSink.error(new ProviderExchangeClient.ResponseLimitExceededException());
+                                                return;
+                                            }
+                                            byte[] data = new byte[readableBytes];
                                             buffer.readBytes(data);
-                                            return new ProviderFrame(status, data);
+                                            reactorSink.next(new ProviderFrame(status, data));
                                         })
+                                        .timeout(limits.streamIdleTimeout())
                                         .switchIfEmpty(Flux.just(new ProviderFrame(status, new byte[0])));
                                 return handler.handle(status, location, body);
                             }),
