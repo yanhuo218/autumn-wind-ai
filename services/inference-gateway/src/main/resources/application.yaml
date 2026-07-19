@@ -5,3 +5,33 @@ spring:
 server:
   port: ${INFERENCE_GATEWAY_SERVER_PORT:8083}
   shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+autumn-wind:
+  inference:
+    http:
+      request-max-bytes: ${INFERENCE_GATEWAY_HTTP_REQUEST_MAX_BYTES:1048576}
+    secret-store:
+      master-key-file: ${INFERENCE_GATEWAY_SECRET_STORE_MASTER_KEY_FILE}
+      key-id: ${INFERENCE_GATEWAY_SECRET_STORE_KEY_ID}
+    service-jwt:
+      issuer: ${INFERENCE_GATEWAY_SERVICE_JWT_ISSUER}
+      private-key-path: ${INFERENCE_GATEWAY_SERVICE_JWT_PRIVATE_KEY_PATH}
+      public-key-path: ${INFERENCE_GATEWAY_SERVICE_JWT_PUBLIC_KEY_PATH}
+      key-id: ${INFERENCE_GATEWAY_SERVICE_JWT_KEY_ID}
+      lifetime: ${INFERENCE_GATEWAY_SERVICE_JWT_LIFETIME:PT30S}
+    model-registry:
+      base-url: ${INFERENCE_GATEWAY_MODEL_REGISTRY_BASE_URL}
+      timeout: ${INFERENCE_GATEWAY_MODEL_REGISTRY_TIMEOUT:PT5S}
+      allow-loopback-http-for-test: ${INFERENCE_GATEWAY_MODEL_REGISTRY_ALLOW_LOOPBACK_HTTP_FOR_TEST:false}
+    conversation-jwt:
+      issuer: ${INFERENCE_GATEWAY_CONVERSATION_JWT_ISSUER}
+      audience: inference-gateway
+      jwk-set-uri: ${INFERENCE_GATEWAY_CONVERSATION_JWT_JWK_SET_URI}
+      allowed-callers: conversation-service
+      maximum-lifetime: ${INFERENCE_GATEWAY_CONVERSATION_JWT_MAXIMUM_LIFETIME:PT60S}
