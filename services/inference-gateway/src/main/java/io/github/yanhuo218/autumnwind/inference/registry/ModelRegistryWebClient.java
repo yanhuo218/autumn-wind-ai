@@ -8,6 +8,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Objects;
@@ -23,10 +24,20 @@ public final class ModelRegistryWebClient implements InferenceTargetClient {
 
     private final WebClient webClient;
     private final Function<UUID, Mono<String>> serviceJwtProvider;
+    private final Duration timeout;
 
-    public ModelRegistryWebClient(WebClient webClient, Function<UUID, Mono<String>> serviceJwtProvider) {
+    ModelRegistryWebClient(WebClient webClient, Function<UUID, Mono<String>> serviceJwtProvider) {
+        this(webClient, serviceJwtProvider, Duration.ofSeconds(30));
+    }
+
+    public ModelRegistryWebClient(
+            WebClient webClient,
+            Function<UUID, Mono<String>> serviceJwtProvider,
+            Duration timeout
+    ) {
         this.webClient = Objects.requireNonNull(webClient, "Registry WebClient 不能为空。");
         this.serviceJwtProvider = Objects.requireNonNull(serviceJwtProvider, "Service JWT 提供器不能为空。");
+        this.timeout = Objects.requireNonNull(timeout, "Registry 总超时不能为空。");
     }
 
     @Override
@@ -45,6 +56,7 @@ public final class ModelRegistryWebClient implements InferenceTargetClient {
                         .contentType(MediaType.APPLICATION_JSON)
                         .bodyValue(request)
                         .exchangeToMono(response -> readResponse(response, ownerUserId)))
+                .timeout(timeout)
                 .onErrorMap(error -> error instanceof RegistryClientException
                         ? error
                         : new RegistryClientException());

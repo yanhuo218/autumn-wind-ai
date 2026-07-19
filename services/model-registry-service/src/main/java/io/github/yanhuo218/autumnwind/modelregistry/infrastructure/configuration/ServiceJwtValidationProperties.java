@@ -12,4 +12,8 @@ public interface ServiceJwtValidationProperties {
     Set<String> allowedCallers();
 
     Duration maximumLifetime();
+
+    default boolean requiresUniqueAudience() {
+        return false;
+    }
 }

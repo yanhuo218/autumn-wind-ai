@@ -44,6 +44,16 @@ class ConversationServiceJwtValidatorTest {
         assertTrue(validator.validate(token(ISSUER, AUDIENCE, null, "request-id", 30)).hasErrors());
     }
 
+    @Test
+    void 拒绝包含目标受众和额外受众的令牌() {
+        assertTrue(validator.validate(token(
+                ISSUER,
+                List.of(AUDIENCE, "other-service"),
+                "conversation-service",
+                "request-id",
+                30)).hasErrors());
+    }
+
     private static ConversationJwtProperties properties() {
         return new ConversationJwtProperties(
                 ISSUER,
@@ -54,11 +64,21 @@ class ConversationServiceJwtValidatorTest {
     }
 
     private static Jwt token(String issuer, String audience, String subject, String jwtId, long expiresInSeconds) {
+        return token(issuer, List.of(audience), subject, jwtId, expiresInSeconds);
+    }
+
+    private static Jwt token(
+            String issuer,
+            List<String> audiences,
+            String subject,
+            String jwtId,
+            long expiresInSeconds
+    ) {
         Instant issuedAt = expiresInSeconds < 0 ? NOW.minusSeconds(400) : NOW.minusSeconds(10);
         Jwt.Builder builder = Jwt.withTokenValue("placeholder-token")
                 .header("alg", "RS256")
                 .issuer(issuer)
-                .audience(List.of(audience))
+                .audience(audiences)
                 .issuedAt(issuedAt)
                 .expiresAt(NOW.plusSeconds(expiresInSeconds));
         if (subject != null) {

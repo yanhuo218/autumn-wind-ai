@@ -14,6 +14,7 @@ import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 
 public final class ServiceJwtValidator implements OAuth2TokenValidator<Jwt> {
@@ -26,10 +27,13 @@ public final class ServiceJwtValidator implements OAuth2TokenValidator<Jwt> {
         Objects.requireNonNull(clock, "时钟不能为空。");
         JwtTimestampValidator timestampValidator = new JwtTimestampValidator(ALLOWED_CLOCK_SKEW);
         timestampValidator.setClock(clock);
+        OAuth2TokenValidator<Jwt> audienceValidator = properties.requiresUniqueAudience()
+                ? token -> validateAudience(token, properties.audience())
+                : new JwtAudienceValidator(properties.audience());
         delegate = new DelegatingOAuth2TokenValidator<>(
                 timestampValidator,
                 new JwtIssuerValidator(properties.issuer()),
-                new JwtAudienceValidator(properties.audience()),
+                audienceValidator,
                 new JwtClaimValidator<>("sub", subject -> subject instanceof String value
                         && properties.allowedCallers().contains(value)),
                 new JwtClaimValidator<>("jti", value -> value instanceof String text && !text.isBlank()),
@@ -40,6 +44,14 @@ public final class ServiceJwtValidator implements OAuth2TokenValidator<Jwt> {
     @Override
     public OAuth2TokenValidatorResult validate(Jwt token) {
         return delegate.validate(token);
+    }
+
+    private static OAuth2TokenValidatorResult validateAudience(Jwt token, String expectedAudience) {
+        if (!token.getAudience().equals(List.of(expectedAudience))) {
+            return OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                    "invalid_token", "Service JWT 受众不合法。", null));
+        }
+        return OAuth2TokenValidatorResult.success();
     }
 
     private static OAuth2TokenValidatorResult validateLifetime(Jwt token, Duration maximumLifetime, Instant now) {

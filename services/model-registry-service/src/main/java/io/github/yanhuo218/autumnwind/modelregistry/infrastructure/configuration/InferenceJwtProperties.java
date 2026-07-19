@@ -56,4 +56,9 @@ public record InferenceJwtProperties(
         }
         return value.trim();
     }
+
+    @Override
+    public boolean requiresUniqueAudience() {
+        return true;
+    }
 }

@@ -7,6 +7,7 @@ import io.github.yanhuo218.autumnwind.inference.security.RsaKeyMaterial;
 import io.github.yanhuo218.autumnwind.inference.security.RsaKeyMaterialLoader;
 import io.github.yanhuo218.autumnwind.inference.security.ServiceJwtIssuer;
 import io.github.yanhuo218.autumnwind.inference.security.ServiceJwtRequest;
+import io.netty.channel.ChannelOption;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -42,19 +43,26 @@ public class InferenceJwtConfiguration {
     }
 
     @Bean
+    HttpClient modelRegistryHttpClient(ModelRegistryClientProperties properties) {
+        return HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, Math.toIntExact(properties.timeout().toMillis()))
+                .responseTimeout(properties.timeout());
+    }
+
+    @Bean
     InferenceTargetClient modelRegistryWebClient(
             ModelRegistryClientProperties properties,
-            ServiceJwtIssuer serviceJwtIssuer
+            ServiceJwtIssuer serviceJwtIssuer,
+            HttpClient modelRegistryHttpClient
     ) {
         WebClient webClient = WebClient.builder()
                 .baseUrl(properties.baseUrl().toString())
-                .clientConnector(new ReactorClientHttpConnector(
-                        HttpClient.create().responseTimeout(properties.timeout())))
+                .clientConnector(new ReactorClientHttpConnector(modelRegistryHttpClient))
                 .build();
         return new ModelRegistryWebClient(webClient, ownerUserId -> Mono.fromSupplier(() -> serviceJwtIssuer.issue(
                 ServiceJwtRequest.actor(
                         "model-registry-service",
                         "model-registry.inference.resolve",
-                        ownerUserId))));
+                        ownerUserId))), properties.timeout());
     }
 }

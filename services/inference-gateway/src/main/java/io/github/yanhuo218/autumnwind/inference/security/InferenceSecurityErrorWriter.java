@@ -1,16 +1,12 @@
 package io.github.yanhuo218.autumnwind.inference.security;
 
-import io.github.yanhuo218.autumnwind.inference.interfaces.http.ApiErrorResponse;
-import io.github.yanhuo218.autumnwind.inference.interfaces.http.CorrelationIdWebFilter;
+import io.github.yanhuo218.autumnwind.inference.interfaces.http.InferenceErrorResponseWriter;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
-
-import java.nio.charset.StandardCharsets;
 
 @Component
 public final class InferenceSecurityErrorWriter {
@@ -37,22 +33,9 @@ public final class InferenceSecurityErrorWriter {
         if (response.isCommitted()) {
             return Mono.empty();
         }
-        String correlationId = CorrelationIdWebFilter.current(exchange);
-        ApiErrorResponse error = new ApiErrorResponse(code, message, correlationId);
-        response.setStatusCode(status);
-        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        response.getHeaders().setCacheControl("no-store");
-        response.getHeaders().set("X-Content-Type-Options", "nosniff");
-        response.getHeaders().set(CorrelationIdWebFilter.HEADER_NAME, correlationId);
         if (includeBearerChallenge) {
             response.getHeaders().set(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
         }
-        byte[] body = json(error).getBytes(StandardCharsets.UTF_8);
-        return response.writeWith(Mono.just(response.bufferFactory().wrap(body)));
-    }
-
-    private static String json(ApiErrorResponse error) {
-        return "{\"code\":\"" + error.code() + "\",\"message\":\"" + error.message()
-                + "\",\"correlationId\":\"" + error.correlationId() + "\"}";
+        return InferenceErrorResponseWriter.write(exchange, status, code, message);
     }
 }

@@ -11,14 +11,18 @@ import io.github.yanhuo218.autumnwind.security.secrets.SecretStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import io.netty.channel.ChannelOption;
+import reactor.netty.http.client.HttpClient;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.time.Duration;
 import java.util.Base64;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,6 +73,16 @@ class InferenceApplicationConfigurationTest {
         assertThrows(JacksonException.class, () -> mapper.readValue("{\"value\":1,\"value\":2}", Value.class));
         assertThrows(JacksonException.class, () -> mapper.readValue("{\"value\":1} {}", Value.class));
         assertThrows(JacksonException.class, () -> mapper.readValue("{\"value\":\"1\"}", Value.class));
+    }
+
+    @Test
+    void Registry连接超时不超过总预算() {
+        ModelRegistryClientProperties properties = new ModelRegistryClientProperties(
+                URI.create("https://registry.internal"), Duration.ofSeconds(1), false);
+
+        HttpClient client = new InferenceJwtConfiguration().modelRegistryHttpClient(properties);
+
+        assertEquals(1_000, client.configuration().options().get(ChannelOption.CONNECT_TIMEOUT_MILLIS));
     }
 
     private static KeyPair generateKeyPair() throws Exception {

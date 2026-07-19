@@ -104,6 +104,9 @@ class InferencePropertiesTest {
                 URI.create("https://registry.internal"), Duration.ZERO, false))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new ModelRegistryClientProperties(
+                URI.create("https://registry.internal"), Duration.ofMillis(999), false))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ModelRegistryClientProperties(
                 URI.create("https://registry.internal"), Duration.ofSeconds(31), false))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new ModelRegistryClientProperties(

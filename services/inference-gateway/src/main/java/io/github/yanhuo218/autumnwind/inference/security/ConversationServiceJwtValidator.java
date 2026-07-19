@@ -6,7 +6,6 @@ import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtAudienceValidator;
 import org.springframework.security.oauth2.jwt.JwtClaimValidator;
 import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
@@ -14,6 +13,7 @@ import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 
 public final class ConversationServiceJwtValidator implements OAuth2TokenValidator<Jwt> {
@@ -30,7 +30,7 @@ public final class ConversationServiceJwtValidator implements OAuth2TokenValidat
         this.delegate = new DelegatingOAuth2TokenValidator<>(
                 timestampValidator,
                 new JwtIssuerValidator(properties.issuer()),
-                new JwtAudienceValidator(properties.audience()),
+                token -> validateAudience(token, properties.audience()),
                 new JwtClaimValidator<>("sub", subject -> subject instanceof String value
                         && ConversationJwtProperties.REQUIRED_CALLER.equals(value)),
                 new JwtClaimValidator<>("jti", jwtId -> jwtId instanceof String value && !value.isBlank()),
@@ -41,6 +41,14 @@ public final class ConversationServiceJwtValidator implements OAuth2TokenValidat
     @Override
     public OAuth2TokenValidatorResult validate(Jwt token) {
         return delegate.validate(token);
+    }
+
+    private static OAuth2TokenValidatorResult validateAudience(Jwt token, String expectedAudience) {
+        if (!token.getAudience().equals(List.of(expectedAudience))) {
+            return OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                    "invalid_token", "Conversation JWT 受众不合法。", null));
+        }
+        return OAuth2TokenValidatorResult.success();
     }
 
     private static OAuth2TokenValidatorResult validateLifetime(

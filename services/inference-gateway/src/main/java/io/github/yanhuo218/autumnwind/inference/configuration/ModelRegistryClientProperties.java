@@ -16,7 +16,8 @@ public record ModelRegistryClientProperties(
     public ModelRegistryClientProperties {
         baseUrl = requireSafeBaseUrl(baseUrl, allowLoopbackHttpForTest);
         Objects.requireNonNull(timeout, "Model Registry 超时不能为空。");
-        if (timeout.isNegative() || timeout.isZero() || timeout.compareTo(Duration.ofSeconds(30)) > 0) {
+        if (timeout.compareTo(Duration.ofSeconds(1)) < 0
+                || timeout.compareTo(Duration.ofSeconds(30)) > 0) {
             throw new IllegalArgumentException("Model Registry 超时必须为 1 到 30 秒。");
         }
     }

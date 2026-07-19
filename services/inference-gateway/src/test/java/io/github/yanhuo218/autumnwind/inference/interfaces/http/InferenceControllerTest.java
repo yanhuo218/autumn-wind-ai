@@ -3,6 +3,7 @@ package io.github.yanhuo218.autumnwind.inference.interfaces.http;
 import io.github.yanhuo218.autumnwind.inference.application.ChatInferenceService;
 import io.github.yanhuo218.autumnwind.inference.chat.InferenceEvent;
 import io.github.yanhuo218.autumnwind.inference.chat.OpenAiChatCompletionsAdapter;
+import io.github.yanhuo218.autumnwind.inference.configuration.InferenceHttpProperties;
 import io.github.yanhuo218.autumnwind.inference.credentials.EndpointCredentialResolver;
 import io.github.yanhuo218.autumnwind.inference.registry.InferenceTarget;
 import io.github.yanhuo218.autumnwind.inference.registry.InferenceTargetClient;
@@ -68,7 +69,15 @@ class InferenceControllerTest {
     private WebTestClient client;
     @BeforeEach
     void setUp() {
+        configureClient(InferenceHttpProperties.HARD_MAX_BYTES);
+    }
+
+    private void configureClient(int requestMaxBytes) {
+        if (context != null) {
+            context.close();
+        }
         TestConfiguration.CALLS.set(0);
+        TestConfiguration.REQUEST_MAX_BYTES.set(requestMaxBytes);
         context = new AnnotationConfigApplicationContext();
         context.register(TestConfiguration.class, InferenceController.class,
                 InferenceExceptionHandler.class, CorrelationIdWebFilter.class, RequestBodyLimitWebFilter.class);
@@ -137,11 +146,36 @@ class InferenceControllerTest {
     }
 
     @Test
-    void 不支持的请求和响应媒体类型分别返回415和406() {
-        client.post().uri(PATH).contentType(MediaType.TEXT_PLAIN).bodyValue(validRequest())
-                .exchange().expectStatus().isEqualTo(415);
+    void 不支持的请求媒体类型返回稳定415错误() {
+        client.post().uri(PATH)
+                .header("X-Correlation-ID", CORRELATION_ID)
+                .contentType(MediaType.TEXT_PLAIN)
+                .bodyValue(validRequest())
+                .exchange()
+                .expectStatus().isEqualTo(415)
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store")
+                .expectHeader().valueEquals("X-Content-Type-Options", "nosniff")
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AW-INFERENCE-MEDIA_TYPE-0001")
+                .jsonPath("$.message").isEqualTo("请求媒体类型必须为 application/json。")
+                .jsonPath("$.correlationId").isEqualTo(CORRELATION_ID);
+        assertEquals(0, TestConfiguration.CALLS.get());
+    }
+
+    @Test
+    void 不支持的响应媒体类型返回稳定406错误() {
         authenticatedPost(validRequest()).accept(MediaType.APPLICATION_XML)
-                .exchange().expectStatus().isEqualTo(406);
+                .exchange()
+                .expectStatus().isEqualTo(406)
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store")
+                .expectHeader().valueEquals("X-Content-Type-Options", "nosniff")
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AW-INFERENCE-NOT_ACCEPTABLE-0001")
+                .jsonPath("$.message").isEqualTo("请求的响应媒体类型不受支持。")
+                .jsonPath("$.correlationId").isEqualTo(CORRELATION_ID);
+        assertEquals(0, TestConfiguration.CALLS.get());
     }
 
     @Test
@@ -152,7 +186,43 @@ class InferenceControllerTest {
                 .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store")
                 .expectHeader().valueEquals("X-Content-Type-Options", "nosniff")
                 .expectHeader().valueEquals("X-Correlation-ID", CORRELATION_ID)
-                .expectBody().isEmpty();
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AW-INFERENCE-PAYLOAD-0001")
+                .jsonPath("$.message").isEqualTo("推理请求体超过大小限制。")
+                .jsonPath("$.correlationId").isEqualTo(CORRELATION_ID);
+        assertEquals(0, TestConfiguration.CALLS.get());
+    }
+
+    @Test
+    void 运行时配置为1024字节时按该上限返回413且不调用服务() {
+        configureClient(1024);
+        String oversized = validRequest() + " ".repeat(800);
+
+        authenticatedPost(oversized).exchange()
+                .expectStatus().isEqualTo(org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE)
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store")
+                .expectHeader().valueEquals("X-Content-Type-Options", "nosniff")
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AW-INFERENCE-PAYLOAD-0001")
+                .jsonPath("$.correlationId").isEqualTo(CORRELATION_ID);
+        assertEquals(0, TestConfiguration.CALLS.get());
+    }
+
+    @Test
+    void 未处理异常返回稳定500且不泄露异常详情() {
+        byte[] body = authenticatedPostWithoutActor(validRequest()).exchange()
+                .expectStatus().isEqualTo(500)
+                .expectHeader().contentType(MediaType.APPLICATION_JSON)
+                .expectHeader().valueEquals(HttpHeaders.CACHE_CONTROL, "no-store")
+                .expectHeader().valueEquals("X-Content-Type-Options", "nosniff")
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AW-INFERENCE-INTERNAL-0001")
+                .jsonPath("$.message").isEqualTo("推理服务发生内部错误。")
+                .jsonPath("$.correlationId").isEqualTo(CORRELATION_ID)
+                .returnResult().getResponseBodyContent();
+        assertTrue(!new String(body, StandardCharsets.UTF_8).contains("NullPointerException"));
         assertEquals(0, TestConfiguration.CALLS.get());
     }
 
@@ -178,13 +248,13 @@ class InferenceControllerTest {
         ServerWebExchange exchange = new DefaultServerWebExchange(
                 MockServerHttpRequest.post(PATH).contentType(MediaType.APPLICATION_JSON)
                         .body(Flux.just(DefaultDataBufferFactory.sharedInstance.wrap(
-                                new byte[RequestBodyLimitWebFilter.MAX_REQUEST_BYTES + 1]))),
+                                new byte[InferenceHttpProperties.HARD_MAX_BYTES + 1]))),
                 response,
                 new DefaultWebSessionManager(),
                 org.springframework.http.codec.ServerCodecConfigurer.create(),
                 new AcceptHeaderLocaleContextResolver());
 
-        new RequestBodyLimitWebFilter().filter(exchange,
+        new RequestBodyLimitWebFilter(new InferenceHttpProperties(InferenceHttpProperties.HARD_MAX_BYTES)).filter(exchange,
                 current -> current.getRequest().getBody().doOnNext(DataBufferUtils::release).then()).block();
 
         assertTrue(response.isCommitted());
@@ -214,6 +284,17 @@ class InferenceControllerTest {
                 .accept(MediaType.parseMediaType("application/x-ndjson"));
     }
 
+    private WebTestClient.RequestHeadersSpec<?> authenticatedPostWithoutActor(String body) {
+        return client.mutateWith(mockJwt().jwt(jwt -> jwt
+                        .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)))
+                        .authorities(new SimpleGrantedAuthority("SCOPE_inference.chat.invoke")))
+                .post().uri(PATH)
+                .header("X-Correlation-ID", CORRELATION_ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.parseMediaType("application/x-ndjson"))
+                .bodyValue(body);
+    }
+
     private static String validRequest() {
         return "{\"ownerUserId\":\"f7590cc5-1e56-4a28-ac97-e58380a6d94e\","
                 + "\"modelId\":\"b88e1f00-83dc-4cf0-a7b3-000000000001\","
@@ -228,6 +309,7 @@ class InferenceControllerTest {
     static class TestConfiguration {
 
         private static final AtomicInteger CALLS = new AtomicInteger();
+        private static final AtomicInteger REQUEST_MAX_BYTES = new AtomicInteger();
 
         @Bean
         ChatInferenceService chatInferenceService() {
@@ -265,6 +347,11 @@ class InferenceControllerTest {
         @Bean
         ObjectMapper strictObjectMapper() {
             return strictMapper();
+        }
+
+        @Bean
+        InferenceHttpProperties inferenceHttpProperties() {
+            return new InferenceHttpProperties(REQUEST_MAX_BYTES.get());
         }
 
         @Bean

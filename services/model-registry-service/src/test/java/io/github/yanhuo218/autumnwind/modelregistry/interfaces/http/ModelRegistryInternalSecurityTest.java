@@ -1,8 +1,11 @@
 package io.github.yanhuo218.autumnwind.modelregistry.interfaces.http;
 
 import io.github.yanhuo218.autumnwind.modelregistry.application.inference.InferenceTargetResolutionService;
+import io.github.yanhuo218.autumnwind.modelregistry.infrastructure.configuration.InferenceJwtProperties;
 import io.github.yanhuo218.autumnwind.modelregistry.infrastructure.configuration.ModelRegistrySecurityConfiguration;
+import io.github.yanhuo218.autumnwind.modelregistry.infrastructure.configuration.ServiceJwtProperties;
 import io.github.yanhuo218.autumnwind.modelregistry.infrastructure.security.ModelRegistrySecurityErrorWriter;
+import io.github.yanhuo218.autumnwind.modelregistry.infrastructure.security.ServiceJwtValidator;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
@@ -18,6 +21,17 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.net.URI;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -136,6 +150,54 @@ class ModelRegistryInternalSecurityTest {
                 .andExpect(jsonPath("$.code").value("AW-MODEL_REGISTRY-FORBIDDEN-0001"));
 
         verify(resolutionService, never()).resolve(any(), any());
+    }
+
+    @Test
+    void 内部Validator拒绝包含额外受众的令牌() {
+        Instant now = Instant.parse("2026-07-19T00:00:00Z");
+        InferenceJwtProperties properties = new InferenceJwtProperties(
+                "https://inference.internal",
+                "model-registry-service",
+                URI.create("https://inference.internal/internal/v1/security/jwks"),
+                Set.of("inference-gateway-service"),
+                Duration.ofSeconds(60));
+        ServiceJwtValidator validator = new ServiceJwtValidator(
+                properties, Clock.fixed(now, ZoneOffset.UTC));
+        Jwt token = Jwt.withTokenValue("inference-token-placeholder")
+                .header("alg", "RS256")
+                .issuer("https://inference.internal")
+                .subject("inference-gateway-service")
+                .audience(List.of("model-registry-service", "other-service"))
+                .issuedAt(now.minusSeconds(10))
+                .expiresAt(now.plusSeconds(20))
+                .claim("jti", "inference-jti-placeholder")
+                .build();
+
+        assertTrue(validator.validate(token).hasErrors());
+    }
+
+    @Test
+    void 公共Validator保持原有的目标受众包含语义() {
+        Instant now = Instant.parse("2026-07-19T00:00:00Z");
+        ServiceJwtProperties properties = new ServiceJwtProperties(
+                "https://gateway.internal",
+                "model-registry-service",
+                URI.create("https://gateway.internal/internal/v1/security/jwks"),
+                Set.of("gateway-service"),
+                Duration.ofMinutes(5));
+        ServiceJwtValidator validator = new ServiceJwtValidator(
+                properties, Clock.fixed(now, ZoneOffset.UTC));
+        Jwt token = Jwt.withTokenValue("gateway-token-placeholder")
+                .header("alg", "RS256")
+                .issuer("https://gateway.internal")
+                .subject("gateway-service")
+                .audience(List.of("model-registry-service", "other-service"))
+                .issuedAt(now.minusSeconds(10))
+                .expiresAt(now.plusSeconds(20))
+                .claim("jti", "gateway-jti-placeholder")
+                .build();
+
+        assertFalse(validator.validate(token).hasErrors());
     }
 
     private static Jwt inferenceJwt() {

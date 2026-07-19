@@ -198,6 +198,22 @@ class ModelRegistryWebClientTest {
     }
 
     @Test
+    void 完整ResolvePublisher超过Registry预算后返回稳定失败() {
+        ModelRegistryWebClient client = new ModelRegistryWebClient(
+                WebClient.builder().baseUrl(REGISTRY_BASE_URI.toString())
+                        .exchangeFunction(request -> Mono.just(successResponse()))
+                        .build(),
+                ownerUserId -> Mono.never(),
+                Duration.ofSeconds(1));
+
+        RuntimeException error = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+                () -> client.resolve(OWNER_ID, MODEL_ID, CORRELATION_ID)
+                        .block(Duration.ofMillis(1_500)));
+
+        assertEquals("模型 Registry 请求失败。", error.getMessage());
+    }
+
+    @Test
     void 快照字符串表示隐藏目标地址和加密信封() {
         ModelRegistryWebClient client = new ModelRegistryWebClient(
                 WebClient.builder().baseUrl(REGISTRY_BASE_URI.toString())

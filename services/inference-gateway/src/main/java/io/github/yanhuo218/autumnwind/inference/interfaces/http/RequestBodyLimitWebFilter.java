@@ -1,5 +1,6 @@
 package io.github.yanhuo218.autumnwind.inference.interfaces.http;
 
+import io.github.yanhuo218.autumnwind.inference.configuration.InferenceHttpProperties;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -20,7 +21,11 @@ import java.util.concurrent.atomic.AtomicLong;
 @Order(Ordered.HIGHEST_PRECEDENCE + 1)
 public final class RequestBodyLimitWebFilter implements WebFilter {
 
-    static final int MAX_REQUEST_BYTES = 1_048_576;
+    private final int maxRequestBytes;
+
+    public RequestBodyLimitWebFilter(InferenceHttpProperties properties) {
+        this.maxRequestBytes = properties.requestMaxBytes();
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
@@ -30,7 +35,7 @@ public final class RequestBodyLimitWebFilter implements WebFilter {
         AtomicLong byteCount = new AtomicLong();
         Flux<DataBuffer> limitedBody = exchange.getRequest().getBody().handle((buffer, sink) -> {
             long total = byteCount.addAndGet(buffer.readableByteCount());
-            if (total > MAX_REQUEST_BYTES) {
+            if (total > maxRequestBytes) {
                 DataBufferUtils.release(buffer);
                 sink.error(new RequestBodyTooLargeException());
                 return;
@@ -48,15 +53,13 @@ public final class RequestBodyLimitWebFilter implements WebFilter {
     }
 
     private static Mono<Void> writePayloadTooLarge(ServerWebExchange exchange) {
-        if (exchange.getResponse().isCommitted()) {
-            return Mono.empty();
-        }
-        exchange.getResponse().setStatusCode(HttpStatus.PAYLOAD_TOO_LARGE);
-        exchange.getResponse().getHeaders().setCacheControl("no-store");
-        exchange.getResponse().getHeaders().set("X-Content-Type-Options", "nosniff");
-        return exchange.getResponse().setComplete();
+        return InferenceErrorResponseWriter.write(
+                exchange,
+                HttpStatus.PAYLOAD_TOO_LARGE,
+                "AW-INFERENCE-PAYLOAD-0001",
+                "推理请求体超过大小限制。");
     }
 
-    private static final class RequestBodyTooLargeException extends RuntimeException {
+    static final class RequestBodyTooLargeException extends RuntimeException {
     }
 }
