@@ -15,6 +15,7 @@
 - `openapi/conversation.openapi.json`：Conversation 会话、当前活动分支消息投影、生成快照、停止、重新生成和 SSE 订阅接口。
 - `events/conversation-stream-event.v1.schema.json`：Conversation SSE `data` 字段使用的 V1 事件信封。
 - `events/inference-event.v1.schema.json`：Inference Gateway 标准推理事件。
+- `openapi/inference-internal.openapi.json`：Conversation 调用 Inference Gateway 的内部 NDJSON 推理接口。
 - `events/user-disabled.v1.schema.json`：用户禁用事实。
 - `events/account-deletion-requested.v1.schema.json`：账户删除请求事实。
 - `events/email-requested.v1.schema.json`：不携带验证或重置凭据的邮件投递请求。

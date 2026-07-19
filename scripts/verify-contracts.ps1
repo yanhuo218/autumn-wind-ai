@@ -8,6 +8,7 @@ $identityOpenApiFile = Join-Path $projectRoot "contracts/openapi/identity.openap
 $notificationOpenApiFile = Join-Path $projectRoot "contracts/openapi/notification.openapi.json"
 $modelRegistryOpenApiFile = Join-Path $projectRoot "contracts/openapi/model-registry.openapi.json"
 $modelRegistryInternalOpenApiFile = Join-Path $projectRoot "contracts/openapi/model-registry-internal.openapi.json"
+$inferenceInternalOpenApiFile = Join-Path $projectRoot "contracts/openapi/inference-internal.openapi.json"
 $identityEventFiles = @(
     "user-disabled.v1.schema.json",
     "account-deletion-requested.v1.schema.json",
@@ -22,6 +23,11 @@ $modelRegistryOpenApi = Get-Content -Raw $modelRegistryOpenApiFile | ConvertFrom
 $modelRegistryInternalOpenApi = Get-Content -Raw $modelRegistryInternalOpenApiFile | ConvertFrom-Json
 $conversationOpenApi = Get-Content -Raw (Join-Path $projectRoot "contracts/openapi/conversation.openapi.json") | ConvertFrom-Json
 $conversationStreamSchema = Get-Content -Raw (Join-Path $projectRoot "contracts/events/conversation-stream-event.v1.schema.json") | ConvertFrom-Json
+
+if (-not (Test-Path $inferenceInternalOpenApiFile)) {
+    throw "缺少 Inference Gateway 内部 OpenAPI。"
+}
+$inferenceInternalOpenApi = Get-Content -Raw $inferenceInternalOpenApiFile | ConvertFrom-Json
 
 if (-not (Test-Path $inferenceEventSchemaFile)) {
     throw "Inference 标准事件 Schema 不存在。"
@@ -675,6 +681,78 @@ if ($cacheControlHeader.schema.const -ne "no-store") {
 $internalSecurityDescription = $modelRegistryInternalOpenApi.components.securitySchemes.ServiceJwt.description
 if ($internalSecurityDescription -notmatch "model-registry\.inference\.resolve" -or $internalSecurityDescription -notmatch "actor_user_id") {
     throw "Model Registry 内部推理接口必须声明专用 scope 和操作者声明。"
+}
+
+if ($inferenceInternalOpenApi.openapi -notmatch "^3\.1\.") {
+    throw "Inference 内部 OpenAPI 必须使用 3.1.x。"
+}
+$inferencePath = "/internal/v1/inference/chat-completions"
+$inferencePathItem = $inferenceInternalOpenApi.paths.$inferencePath
+$operation = $inferencePathItem.post
+if ($null -eq $operation -or $inferenceInternalOpenApi.paths.PSObject.Properties.Count -ne 1 `
+        -or $inferencePathItem.PSObject.Properties.Count -ne 1 `
+        -or $inferencePathItem.PSObject.Properties.Name -ne "post") {
+    throw "Inference 内部 OpenAPI 必须只声明固定推理路径。"
+}
+$requestSchema = $inferenceInternalOpenApi.components.schemas.ChatCompletionRequest
+$messageSchema = $inferenceInternalOpenApi.components.schemas.ChatMessage
+if ($requestSchema.additionalProperties -ne $false -or $messageSchema.additionalProperties -ne $false `
+        -or $requestSchema.properties.messages.minItems -ne 1 `
+        -or $requestSchema.properties.messages.maxItems -ne 256) {
+    throw "Inference 内部请求必须严格且消息数量为 1..256。"
+}
+if ((@($requestSchema.required | Sort-Object) -join ",") -ne "generationId,invocationAttemptId,messages,modelId,ownerUserId") {
+    throw "Inference 内部请求必须精确声明五个必填字段。"
+}
+foreach ($field in @("ownerUserId", "modelId", "generationId", "invocationAttemptId")) {
+    if ($requestSchema.properties.$field.format -ne "uuid") {
+        throw "Inference 内部请求字段 $field 必须是 UUID。"
+    }
+}
+if ($requestSchema.properties.messages.items.'$ref' -ne "#/components/schemas/ChatMessage" `
+        -or (@($messageSchema.properties.role.enum | Sort-Object) -join ",") -ne "assistant,user" `
+        -or $messageSchema.properties.content.minLength -ne 1) {
+    throw "Inference 内部消息定义不符合严格约定。"
+}
+if ($requestSchema.properties.systemPrompt.minLength -ne 1 `
+        -or $requestSchema.properties.temperature.minimum -ne 0 `
+        -or $requestSchema.properties.temperature.maximum -ne 2 `
+        -or $requestSchema.properties.maxOutputTokens.minimum -ne 1 `
+        -or $requestSchema.properties.maxOutputTokens.maximum -ne 131072) {
+    throw "Inference 内部请求字段边界不符合约定。"
+}
+if ($operation.requestBody.content.PSObject.Properties.Count -ne 1 `
+        -or $operation.requestBody.content.PSObject.Properties.Name -ne "application/json" `
+        -or $operation.requestBody.content."application/json".schema.'$ref' -ne "#/components/schemas/ChatCompletionRequest") {
+    throw "Inference 内部请求必须使用 JSON ChatCompletionRequest。"
+}
+foreach ($status in @("400", "401", "403", "406", "413", "415", "500")) {
+    if ($null -eq $operation.responses.$status) {
+        throw "Inference OpenAPI 缺少 $status 响应。"
+    }
+}
+$successResponse = $operation.responses."200"
+if ($null -eq $successResponse.content."application/x-ndjson") {
+    throw "Inference 成功响应必须是 application/x-ndjson。"
+}
+if ($successResponse.content."application/x-ndjson".schema.items.'$ref' -ne "../events/inference-event.v1.schema.json") {
+    throw "Inference NDJSON 响应必须引用标准推理事件 Schema。"
+}
+if ($successResponse.headers."Cache-Control".'$ref' -ne "#/components/headers/NoStoreCacheControl" `
+        -or $inferenceInternalOpenApi.components.headers.NoStoreCacheControl.schema.const -ne "no-store" `
+        -or $successResponse.headers."X-Content-Type-Options".'$ref' -ne "#/components/headers/NoSniffContentTypeOptions" `
+        -or $inferenceInternalOpenApi.components.headers.NoSniffContentTypeOptions.schema.const -ne "nosniff") {
+    throw "Inference 成功响应必须声明 no-store 和 nosniff。"
+}
+$inferenceSecurity = $inferenceInternalOpenApi.components.securitySchemes.ServiceJwt
+if ($inferenceSecurity.type -ne "http" -or $inferenceSecurity.scheme -ne "bearer" `
+        -or $inferenceSecurity.bearerFormat -ne "JWT" `
+        -or $inferenceSecurity.description -notmatch "RS256" `
+        -or $inferenceSecurity.description -notmatch "固定的 inference\.chat\.invoke scope" `
+        -or $inferenceSecurity.description -match "inference\.chat\.execute" `
+        -or $inferenceSecurity.description -notmatch "actor_user_id" `
+        -or "ServiceJwt" -notin @($operation.security[0].PSObject.Properties.Name)) {
+    throw "Inference 内部接口必须声明 Bearer Service JWT、固定 scope 和 actor_user_id。"
 }
 
 $policyRequest = $identityOpenApi.components.schemas.AuthPolicyUpdateRequest

@@ -1,0 +1,114 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Inference Gateway 内部接口",
+    "version": "v1",
+    "description": "仅供 Conversation 服务调用的流式文本推理接口。"
+  },
+  "paths": {
+    "/internal/v1/inference/chat-completions": {
+      "post": {
+        "operationId": "streamChatCompletion",
+        "description": "使用服务间 JWT 调用推理，并以 NDJSON 返回标准推理事件。",
+        "security": [{ "ServiceJwt": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChatCompletionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "持续输出的标准推理事件。",
+            "headers": {
+              "Cache-Control": { "$ref": "#/components/headers/NoStoreCacheControl" },
+              "X-Content-Type-Options": { "$ref": "#/components/headers/NoSniffContentTypeOptions" }
+            },
+            "content": {
+              "application/x-ndjson": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "../events/inference-event.v1.schema.json" }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "406": { "$ref": "#/components/responses/Error406" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
+          "500": { "$ref": "#/components/responses/Error500" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ServiceJwt": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Service JWT 必须使用 RS256，且必须包含固定的 inference.chat.invoke scope，actor_user_id 必须与 ownerUserId 一致。"
+      }
+    },
+    "headers": {
+      "NoStoreCacheControl": {
+        "description": "推理事件不得被中间层缓存。",
+        "schema": { "type": "string", "const": "no-store" }
+      },
+      "NoSniffContentTypeOptions": {
+        "description": "禁止内容类型嗅探。",
+        "schema": { "type": "string", "const": "nosniff" }
+      }
+    },
+    "schemas": {
+      "ChatCompletionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ownerUserId", "modelId", "generationId", "invocationAttemptId", "messages"],
+        "properties": {
+          "ownerUserId": { "type": "string", "format": "uuid" },
+          "modelId": { "type": "string", "format": "uuid" },
+          "generationId": { "type": "string", "format": "uuid" },
+          "invocationAttemptId": { "type": "string", "format": "uuid" },
+          "messages": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "$ref": "#/components/schemas/ChatMessage" } },
+          "systemPrompt": { "type": ["string", "null"], "minLength": 1 },
+          "temperature": { "type": ["number", "null"], "minimum": 0, "maximum": 2 },
+          "maxOutputTokens": { "type": ["integer", "null"], "minimum": 1, "maximum": 131072 }
+        }
+      },
+      "ChatMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "content"],
+        "properties": {
+          "role": { "type": "string", "enum": ["user", "assistant"] },
+          "content": { "type": "string", "minLength": 1 }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message", "correlationId"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^AW-INFERENCE-[A-Z][A-Z0-9_]{1,31}-[0-9]{4}$" },
+          "message": { "type": "string", "minLength": 1 },
+          "correlationId": { "type": "string", "minLength": 16, "maxLength": 64 }
+        }
+      }
+    },
+    "responses": {
+      "Error400": { "description": "请求不合法。", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error401": { "description": "Service JWT 无效或缺失。", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error403": { "description": "调用方、scope 或 actor_user_id 不满足授权条件。", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error406": { "description": "响应媒体类型不受支持。", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error413": { "description": "请求体超过限制。", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error415": { "description": "请求媒体类型不受支持。", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+      "Error500": { "description": "服务器内部错误。", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+    }
+  }
+}
