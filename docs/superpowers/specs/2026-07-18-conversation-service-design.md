@@ -166,7 +166,7 @@ Conversation Service 使用短时 Service JWT 调用 Inference Gateway 的内部
 - 所有者用户 ID 和 Registry 模型 ID。
 - 已组装的标准消息与受控 Projection。
 - 温度、最大输出长度等目标模型允许的参数。
-- 生成 ID、关联 ID 和取消传播所需的 attempt 标识。
+- 生成 ID 和取消传播所需的 invocation attempt 标识；关联 ID 通过 `X-Correlation-ID` Header 传递。
 
 Conversation Service 消费既有内部标准事件 `start`、`reasoning`、`text_delta`、`usage`、`error` 和 `done`。它不解释 Provider 私有字段，也不接收端点凭据。`reasoning` 是否向用户展示由模型能力和产品策略共同决定，但不得写入普通日志。
 
