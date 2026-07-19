@@ -1,6 +1,8 @@
 package io.github.yanhuo218.autumnwind.gateway.configuration;
 
 import io.github.yanhuo218.autumnwind.gateway.identity.IdentityAuthProxyClient;
+import io.github.yanhuo218.autumnwind.gateway.identity.IdentitySessionClient;
+import io.github.yanhuo218.autumnwind.gateway.security.ServiceJwtIssuer;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,6 +12,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.netty.http.client.HttpClient;
 
 import java.time.Duration;
+import java.time.Clock;
 
 @Configuration(proxyBeanMethods = false)
 public class GatewayWebClientConfiguration {
@@ -33,5 +36,14 @@ public class GatewayWebClientConfiguration {
     @Bean
     public IdentityAuthProxyClient identityAuthProxyClient(@Qualifier("identityWebClient") WebClient identityWebClient) {
         return IdentityAuthProxyClient.webClientBacked(identityWebClient);
+    }
+
+    @Bean
+    public IdentitySessionClient identitySessionClient(
+            @Qualifier("identityWebClient") WebClient identityWebClient,
+            ServiceJwtIssuer serviceJwtIssuer,
+            Clock serviceJwtClock
+    ) {
+        return IdentitySessionClient.webClientBacked(identityWebClient, serviceJwtIssuer, serviceJwtClock);
     }
 }

@@ -1,6 +1,8 @@
 package io.github.yanhuo218.autumnwind.gateway.configuration;
 
 import io.github.yanhuo218.autumnwind.gateway.web.GatewayErrorResponseWriter;
+import io.github.yanhuo218.autumnwind.gateway.identity.IdentitySessionClient;
+import io.github.yanhuo218.autumnwind.gateway.security.GatewayUserPrincipal;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.config.EnableWebFlux;
+import reactor.core.publisher.Mono;
+
+import java.time.Instant;
+import java.util.UUID;
 
 import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.springSecurity;
 
@@ -51,7 +57,10 @@ class GatewaySecurityConfigurationTest {
         get("/internal/v1/security/jwks").expectStatus().isOk();
         get("/actuator/health").expectStatus().isOk();
         get("/actuator/info").expectStatus().isOk();
-        get("/api/v1/model-registry/models").expectStatus().isOk();
+        client.get().uri("/api/v1/model-registry/models")
+                .cookie("AW_SESSION", "opaque-session-value")
+                .exchange()
+                .expectStatus().isOk();
     }
 
     @Test
@@ -96,6 +105,14 @@ class GatewaySecurityConfigurationTest {
         @Bean
         PermittedEndpointController permittedEndpointController() {
             return new PermittedEndpointController();
+        }
+
+        @Bean
+        IdentitySessionClient identitySessionClient() {
+            return (session, correlationId) -> Mono.just(new GatewayUserPrincipal(
+                    UUID.fromString("4c184ec5-9127-4f43-a4b9-662d5e38846b"),
+                    "USER",
+                    Instant.parse("2026-07-19T00:01:00Z")));
         }
     }
 
