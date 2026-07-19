@@ -40,6 +40,19 @@ public class InferenceSecurityConfiguration {
     }
 
     @Bean
+    @Order(0)
+    public SecurityWebFilterChain inferenceJwksSecurityWebFilterChain(ServerHttpSecurity http) {
+        return http.securityMatcher(new PathPatternParserServerWebExchangeMatcher("/internal/v1/security/jwks"))
+                .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .requestCache(ServerHttpSecurity.RequestCacheSpec::disable)
+                .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
+                .authorizeExchange(authorize -> authorize
+                        .pathMatchers(HttpMethod.GET, "/internal/v1/security/jwks").permitAll()
+                        .anyExchange().denyAll())
+                .build();
+    }
+
+    @Bean
     @Order(1)
     public SecurityWebFilterChain inferenceInternalSecurityWebFilterChain(
             ServerHttpSecurity http,

@@ -1,5 +1,8 @@
 package io.github.yanhuo218.autumnwind.inference.registry;
 
+import io.github.yanhuo218.autumnwind.inference.configuration.InferenceServiceJwtProperties;
+import io.github.yanhuo218.autumnwind.inference.security.NimbusServiceJwtIssuer;
+import io.github.yanhuo218.autumnwind.inference.security.RsaKeyMaterial;
 import io.github.yanhuo218.autumnwind.security.secrets.EncryptedSecret;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,8 +20,18 @@ import org.springframework.web.reactive.function.client.ExchangeFunction;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.JsonNode;
 
 import java.net.URI;
+import java.nio.file.Path;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Optional;
@@ -94,6 +107,31 @@ class ModelRegistryWebClientTest {
         assertEquals(1024, target.capabilities().maxOutputLength());
         assertEquals(CREDENTIAL_ID, target.credentialId());
         assertEncryptedEnvelope(target.credential());
+    }
+
+    @Test
+    void 发送带固定RegistryScope和owner操作者声明的签名令牌() throws Exception {
+        AtomicReference<ClientRequest> capturedRequest = new AtomicReference<>();
+        WebClient webClient = WebClient.builder()
+                .baseUrl(REGISTRY_BASE_URI.toString())
+                .exchangeFunction(request -> {
+                    capturedRequest.set(request);
+                    return Mono.just(successResponse());
+                })
+                .build();
+        ModelRegistryWebClient client = new ModelRegistryWebClient(webClient, ownerUserId -> Mono.fromSupplier(() ->
+                issuer().issue(io.github.yanhuo218.autumnwind.inference.security.ServiceJwtRequest.actor(
+                        "model-registry-service", "model-registry.inference.resolve", ownerUserId))));
+
+        client.resolve(OWNER_ID, MODEL_ID, CORRELATION_ID).block();
+
+        String authorization = capturedRequest.get().headers().getFirst(HttpHeaders.AUTHORIZATION);
+        assertTrue(authorization.startsWith("Bearer "));
+        JsonNode claims = decodeClaims(authorization.substring("Bearer ".length()));
+        assertEquals("model-registry.inference.resolve", claims.path("scope").stringValue());
+        assertEquals(OWNER_ID.toString(), claims.path("actor_user_id").stringValue());
+        assertSingleAudience(claims, "model-registry-service");
+        assertEquals(InferenceServiceJwtProperties.SUBJECT, claims.path("sub").stringValue());
     }
 
     @Test
@@ -270,5 +308,36 @@ class ModelRegistryWebClientTest {
             bytes[index] = (byte) (index + 1);
         }
         return Base64.getEncoder().encodeToString(bytes);
+    }
+
+    private static NimbusServiceJwtIssuer issuer() {
+        try {
+            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+            generator.initialize(2048);
+            KeyPair keyPair = generator.generateKeyPair();
+            return new NimbusServiceJwtIssuer(new RsaKeyMaterial(
+                    (RSAPrivateKey) keyPair.getPrivate(), (RSAPublicKey) keyPair.getPublic(), "inference-key-2026"),
+                    new InferenceServiceJwtProperties("https://inference.internal", Path.of("unused-private.pem"),
+                            Path.of("unused-public.pem"), "inference-key-2026", Duration.ofSeconds(60)),
+                    Clock.fixed(Instant.parse("2026-07-19T00:00:00Z"), ZoneOffset.UTC));
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    private static JsonNode decodeClaims(String token) throws Exception {
+        String[] parts = token.split("\\.");
+        assertEquals(3, parts.length);
+        return new tools.jackson.databind.ObjectMapper().readTree(Base64.getUrlDecoder().decode(parts[1]));
+    }
+
+    private static void assertSingleAudience(JsonNode claims, String expectedAudience) {
+        JsonNode audience = claims.path("aud");
+        if (audience.isArray()) {
+            assertEquals(1, audience.size());
+            assertEquals(expectedAudience, audience.get(0).stringValue());
+            return;
+        }
+        assertEquals(expectedAudience, audience.stringValue());
     }
 }
