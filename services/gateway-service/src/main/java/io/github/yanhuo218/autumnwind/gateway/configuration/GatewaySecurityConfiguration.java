@@ -1,6 +1,7 @@
 package io.github.yanhuo218.autumnwind.gateway.configuration;
 
 import io.github.yanhuo218.autumnwind.gateway.security.GatewaySessionAuthenticationWebFilter;
+import io.github.yanhuo218.autumnwind.gateway.security.GatewayUserPrincipal;
 import io.github.yanhuo218.autumnwind.gateway.identity.IdentitySessionClient;
 import io.github.yanhuo218.autumnwind.gateway.security.SessionCookieExtractor;
 import io.github.yanhuo218.autumnwind.gateway.web.GatewayErrorCode;
@@ -12,8 +13,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository;
+import reactor.core.publisher.Mono;
 
 @Configuration(proxyBeanMethods = false)
 @EnableWebFluxSecurity
@@ -51,9 +54,13 @@ public class GatewaySecurityConfiguration {
                                 "/api/v1/auth/session",
                                 "/internal/v1/security/jwks",
                                 "/actuator/health",
-                                "/actuator/info",
-                                "/api/v1/model-registry/models")
+                                "/actuator/info")
                         .permitAll()
+                        .pathMatchers(HttpMethod.GET, "/api/v1/model-registry/models")
+                        .access((authentication, context) -> Mono.just(new AuthorizationDecision(
+                                context.getExchange().getAttribute(
+                                        GatewaySessionAuthenticationWebFilter.AUTHENTICATED_USER_ATTRIBUTE)
+                                        instanceof GatewayUserPrincipal)))
                         .pathMatchers(HttpMethod.POST,
                                 "/api/v1/auth/registrations",
                                 "/api/v1/auth/sessions")
