@@ -563,10 +563,40 @@ if ($endpointSecretBoundaryInvalid) {
 }
 $modelRegistrySecurityDescription = $modelRegistryOpenApi.components.securitySchemes.ServiceJwt.description
 $missingEndpointScope = $modelRegistrySecurityDescription -notmatch "model-registry\.endpoint\.manage"
+$missingModelReadScope = $modelRegistrySecurityDescription -notmatch "model-registry\.model\.read"
 $missingModelScope = $modelRegistrySecurityDescription -notmatch "model-registry\.model\.manage"
 $missingActorClaim = $modelRegistrySecurityDescription -notmatch "actor_user_id"
-if ($missingEndpointScope -or $missingModelScope -or $missingActorClaim) {
-    throw "Model Registry Service JWT 必须声明端点、模型 scope 和操作者声明。"
+if ($missingEndpointScope -or $missingModelReadScope -or $missingModelScope -or $missingActorClaim) {
+    throw "Model Registry Service JWT 必须声明端点、模型 read/manage scope 和操作者声明。"
+}
+$modelReadOperations = @(
+    $modelRegistryOpenApi.paths."/api/v1/model-registry/models".get,
+    $modelRegistryOpenApi.paths."/api/v1/model-registry/models/{modelId}".get
+)
+$modelWriteOperations = @(
+    $modelRegistryOpenApi.paths."/api/v1/model-registry/models".post,
+    $modelRegistryOpenApi.paths."/api/v1/model-registry/models/{modelId}".put
+)
+$expectedModelReadScopes = @("model-registry.model.read", "model-registry.model.manage")
+foreach ($operation in $modelReadOperations) {
+    $authorization = $operation."x-service-jwt-authorization"
+    $actualScopes = @($authorization.requiredScopes.anyOf | Sort-Object)
+    if ((Compare-Object $expectedModelReadScopes $actualScopes) -or
+            $authorization.actorUserId.claim -ne "actor_user_id" -or
+            $authorization.actorUserId.format -ne "uuid" -or
+            $authorization.actorUserId.canonical -ne $true) {
+        throw "Model Registry 模型 GET 必须结构化声明 read/manage scope 和规范操作者。"
+    }
+}
+foreach ($operation in $modelWriteOperations) {
+    $authorization = $operation."x-service-jwt-authorization"
+    $actualScopes = @($authorization.requiredScopes.anyOf)
+    if ($actualScopes.Count -ne 1 -or $actualScopes[0] -ne "model-registry.model.manage" -or
+            $authorization.actorUserId.claim -ne "actor_user_id" -or
+            $authorization.actorUserId.format -ne "uuid" -or
+            $authorization.actorUserId.canonical -ne $true) {
+        throw "Model Registry 模型 POST/PUT 必须结构化声明仅管理 scope 和规范操作者。"
+    }
 }
 $connectionTestOperation = $modelRegistryOpenApi.paths."/api/v1/model-registry/endpoints/{endpointId}/connection-tests".post
 $connectionTestMissingAccepted = $null -eq $connectionTestOperation.responses."202"

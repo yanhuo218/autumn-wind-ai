@@ -156,6 +156,16 @@
     "/api/v1/model-registry/models": {
       "get": {
         "operationId": "listModels",
+        "x-service-jwt-authorization": {
+          "actorUserId": {
+            "claim": "actor_user_id",
+            "format": "uuid",
+            "canonical": true
+          },
+          "requiredScopes": {
+            "anyOf": ["model-registry.model.read", "model-registry.model.manage"]
+          }
+        },
         "responses": {
           "200": {
             "description": "当前用户的模型列表。",
@@ -176,6 +186,16 @@
       },
       "post": {
         "operationId": "createModel",
+        "x-service-jwt-authorization": {
+          "actorUserId": {
+            "claim": "actor_user_id",
+            "format": "uuid",
+            "canonical": true
+          },
+          "requiredScopes": {
+            "anyOf": ["model-registry.model.manage"]
+          }
+        },
         "requestBody": {
           "required": true,
           "content": {
@@ -210,6 +230,16 @@
       ],
       "get": {
         "operationId": "getModel",
+        "x-service-jwt-authorization": {
+          "actorUserId": {
+            "claim": "actor_user_id",
+            "format": "uuid",
+            "canonical": true
+          },
+          "requiredScopes": {
+            "anyOf": ["model-registry.model.read", "model-registry.model.manage"]
+          }
+        },
         "responses": {
           "200": {
             "description": "模型详情。",
@@ -229,6 +259,16 @@
       },
       "put": {
         "operationId": "updateModel",
+        "x-service-jwt-authorization": {
+          "actorUserId": {
+            "claim": "actor_user_id",
+            "format": "uuid",
+            "canonical": true
+          },
+          "requiredScopes": {
+            "anyOf": ["model-registry.model.manage"]
+          }
+        },
         "requestBody": {
           "required": true,
           "content": {
@@ -264,7 +304,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "Service JWT 必须包含规范 actor_user_id，并按接口提供 model-registry.endpoint.manage 或 model-registry.model.manage scope。"
+        "description": "Service JWT 必须包含规范 UUID actor_user_id。模型列表和详情 GET 接受 model-registry.model.read 或 model-registry.model.manage；模型 POST 和 PUT 仅接受 model-registry.model.manage。端点接口仍要求 model-registry.endpoint.manage。"
       }
     },
     "parameters": {

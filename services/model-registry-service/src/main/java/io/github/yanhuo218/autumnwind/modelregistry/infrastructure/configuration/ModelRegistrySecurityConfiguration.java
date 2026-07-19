@@ -30,6 +30,7 @@ import java.util.UUID;
 public class ModelRegistrySecurityConfiguration {
 
     private static final String ENDPOINT_MANAGE_AUTHORITY = "SCOPE_model-registry.endpoint.manage";
+    private static final String MODEL_READ_AUTHORITY = "SCOPE_model-registry.model.read";
     private static final String MODEL_MANAGE_AUTHORITY = "SCOPE_model-registry.model.manage";
     private static final String INFERENCE_RESOLVE_AUTHORITY = "SCOPE_model-registry.inference.resolve";
     private static final String CONNECTION_TEST_EXECUTE_AUTHORITY =
@@ -86,7 +87,7 @@ public class ModelRegistrySecurityConfiguration {
                         .requestMatchers(HttpMethod.GET, "/api/v1/model-registry/models",
                                 "/api/v1/model-registry/models/*")
                         .access((authentication, context) -> new AuthorizationDecision(
-                                mayManageModels(authentication.get())))
+                                mayReadModels(authentication.get())))
                         .requestMatchers(HttpMethod.POST, "/api/v1/model-registry/models")
                         .access((authentication, context) -> new AuthorizationDecision(
                                 mayManageModels(authentication.get())))
@@ -113,6 +114,11 @@ public class ModelRegistrySecurityConfiguration {
 
     private static boolean mayManageModels(Authentication authentication) {
         return mayManage(authentication, MODEL_MANAGE_AUTHORITY);
+    }
+
+    private static boolean mayReadModels(Authentication authentication) {
+        return mayManage(authentication, MODEL_READ_AUTHORITY)
+                || mayManageModels(authentication);
     }
 
     private static boolean mayResolveInferenceTarget(Authentication authentication) {
