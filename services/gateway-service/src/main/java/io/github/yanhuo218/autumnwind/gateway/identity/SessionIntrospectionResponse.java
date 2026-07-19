@@ -10,4 +10,13 @@ public record SessionIntrospectionResponse(
         String accountStatus,
         Instant expiresAt
 ) {
+
+    @Override
+    public String toString() {
+        return "SessionIntrospectionResponse[active=" + active
+                + ", userId=" + (userId == null ? "<NONE>" : "<REDACTED>")
+                + ", role=" + role
+                + ", accountStatus=" + accountStatus
+                + ", expiresAt=" + expiresAt + "]";
+    }
 }

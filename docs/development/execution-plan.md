@@ -83,12 +83,13 @@
 
 ## 当前执行批次
 
-阶段 1 和阶段 2 已完成并推送到 `main`。阶段 2 包含：
+阶段 1 至阶段 3 已完成。阶段 3 已交付 Identity、Notification 和管理基础，包括注册策略、账户状态、会话、邮件发送配置和管理接口。
 
-1. PostgreSQL、RabbitMQ、Redis 和 MinIO 本地 Compose 基线。
-2. OpenAPI、事件 Schema、错误码和关联 ID 公共契约。
-3. SecretStore 接口、AES-256-GCM 本地信封加密实现和自动测试。
+阶段 4 正在完成 Gateway 与 Conversation 的真实链路，当前已交付：
 
-阶段 3 第一批已建立 Identity Service 的 HTTP/事件契约、Spring Boot 4.1.0 骨架、独立 `identity` schema 迁移，以及邮箱策略、账户状态和 Argon2id 密码哈希测试。
+1. Model Registry 的端点、凭据引用、模型和能力配置。
+2. Inference Gateway 的 OpenAI-compatible 文本适配器与 SSRF/DNS 防护。
+3. Conversation Service 契约与用户端文本工作区的开发链路。
+4. Gateway 的 Identity 认证透明代理、Session Introspection 和模型目录只读代理。
 
-下一批实现注册、登录、不透明会话 Token 和内部 session introspection，再接入 Notification Worker 与管理端。
+真实 Conversation 生产代理、附件上传和多模态处理仍属于后续垂直批次；完成后再进入阶段 5 的文件与多模态能力。

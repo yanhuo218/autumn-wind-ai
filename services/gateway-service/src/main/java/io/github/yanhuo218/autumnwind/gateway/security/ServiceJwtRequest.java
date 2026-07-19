@@ -32,4 +32,11 @@ public record ServiceJwtRequest(String audience, Set<String> scopes, UUID actorU
     public static ServiceJwtRequest actor(String audience, String scope, UUID actorUserId) {
         return new ServiceJwtRequest(audience, Set.of(scope), Objects.requireNonNull(actorUserId, "操作者不能为空。"));
     }
+
+    @Override
+    public String toString() {
+        return "ServiceJwtRequest[audience=" + audience
+                + ", scopes=" + scopes
+                + ", actorUserId=" + (actorUserId == null ? "<NONE>" : "<REDACTED>") + "]";
+    }
 }

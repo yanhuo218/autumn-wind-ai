@@ -36,7 +36,15 @@ public class GatewayWebClientConfiguration {
     }
 
     @Bean
-    public IdentityAuthProxyClient identityAuthProxyClient(@Qualifier("identityWebClient") WebClient identityWebClient) {
+    public IdentityAuthProxyClient identityAuthProxyClient(
+            @Qualifier("identityWebClient") WebClient identityWebClient,
+            ObjectMapper objectMapper
+    ) {
+        return IdentityAuthProxyClient.webClientBacked(identityWebClient, objectMapper);
+    }
+
+    /** 保留直接构造测试客户端所需的兼容重载。 */
+    public IdentityAuthProxyClient identityAuthProxyClient(WebClient identityWebClient) {
         return IdentityAuthProxyClient.webClientBacked(identityWebClient);
     }
 

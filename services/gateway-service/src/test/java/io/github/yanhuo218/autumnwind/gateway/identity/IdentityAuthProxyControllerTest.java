@@ -81,14 +81,15 @@ class IdentityAuthProxyControllerTest {
 
     @ParameterizedTest
     @MethodSource("authenticationRoutes")
-    void 六条固定认证路由只转发白名单Header并保留安全响应(AuthRoute route) throws InterruptedException {
+    void 固定认证路由只转发白名单Header并保留安全响应(AuthRoute route) throws InterruptedException {
+        upstreamResponse = new UpstreamResponse(route.status().value(), responseHeaders(), route.responseBody());
         byte[] requestBody = route.acceptsBody()
                 ? "{\"email\":\"user@example.test\",\"password\":\"placeholder\"}".getBytes(StandardCharsets.UTF_8)
                 : new byte[0];
 
         EntityExchangeResult<byte[]> response = requestFor(route, requestBody)
                 .exchange()
-                .expectStatus().isCreated()
+                .expectStatus().isEqualTo(route.status())
                 .expectHeader().valueEquals(CorrelationIdWebFilter.HEADER_NAME, CORRELATION_ID)
                 .expectHeader().valueEquals(HttpHeaders.SET_COOKIE, RESPONSE_COOKIE)
                 .expectHeader().valueEquals("X-CSRF-TOKEN", "downstream-csrf-value")
@@ -97,7 +98,7 @@ class IdentityAuthProxyControllerTest {
                 .expectBody()
                 .returnResult();
 
-        assertArrayEquals(RESPONSE_BODY, response.getResponseBody());
+        assertArrayEquals(route.responseBody(), response.getResponseBody());
         CapturedRequest captured = receivedRequests.poll(2, TimeUnit.SECONDS);
         assertTrue(captured != null, "下游应收到代理请求。");
         assertEquals(route.method().name(), captured.method());
@@ -152,6 +153,86 @@ class IdentityAuthProxyControllerTest {
                 .expectStatus().isNoContent()
                 .expectHeader().valueEquals(HttpHeaders.SET_COOKIE, RESPONSE_COOKIE)
                 .expectBody().isEmpty();
+    }
+
+    @Test
+    void 未声明下游状态映射为公开502() {
+        upstreamResponse = new UpstreamResponse(HttpStatus.CREATED.value(), responseHeaders(), RESPONSE_BODY);
+
+        client.get()
+                .uri("/api/v1/auth/csrf")
+                .header(CorrelationIdWebFilter.HEADER_NAME, CORRELATION_ID)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.BAD_GATEWAY)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AW-GATEWAY-DEPENDENCY-0003")
+                .jsonPath("$.correlationId").isEqualTo(CORRELATION_ID);
+    }
+
+    @Test
+    void 非法媒体类型映射为公开502() {
+        upstreamResponse = new UpstreamResponse(HttpStatus.OK.value(), plainTextHeaders(), RESPONSE_BODY);
+
+        client.get()
+                .uri("/api/v1/auth/csrf")
+                .header(CorrelationIdWebFilter.HEADER_NAME, CORRELATION_ID)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.BAD_GATEWAY)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AW-GATEWAY-DEPENDENCY-0003");
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidSuccessBodies")
+    void 成功响应必须是符合路由契约的对象(InvalidSuccessBody invalid) {
+        upstreamResponse = new UpstreamResponse(invalid.route().status().value(), responseHeaders(), invalid.body());
+
+        requestFor(invalid.route(), new byte[0])
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.BAD_GATEWAY)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AW-GATEWAY-DEPENDENCY-0003");
+    }
+
+    @Test
+    void 非法JSON和错误信封映射为公开502() {
+        upstreamResponse = new UpstreamResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), responseHeaders(),
+                "not-json".getBytes(StandardCharsets.UTF_8));
+
+        client.get()
+                .uri("/api/v1/auth/csrf")
+                .header(CorrelationIdWebFilter.HEADER_NAME, CORRELATION_ID)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.BAD_GATEWAY)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AW-GATEWAY-DEPENDENCY-0003");
+
+        upstreamResponse = new UpstreamResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), responseHeaders(),
+                "{\"code\":\"not-stable\",\"message\":\"internal\",\"correlationId\":\"short\"}"
+                        .getBytes(StandardCharsets.UTF_8));
+        client.get()
+                .uri("/api/v1/auth/csrf")
+                .header(CorrelationIdWebFilter.HEADER_NAME, CORRELATION_ID)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.BAD_GATEWAY)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AW-GATEWAY-DEPENDENCY-0003");
+    }
+
+    @Test
+    void 已声明429业务错误保留状态和合法错误正文() {
+        upstreamResponse = new UpstreamResponse(HttpStatus.TOO_MANY_REQUESTS.value(), responseHeaders(),
+                "{\"code\":\"AW-COMMON-RATE_LIMITED-0001\",\"message\":\"请求过于频繁。\",\"correlationId\":\"01JZ8M4A7X4S6NR2YQF1D9K3CP\",\"fieldErrors\":[]}"
+                        .getBytes(StandardCharsets.UTF_8));
+
+        client.get()
+                .uri("/api/v1/auth/csrf")
+                .header(CorrelationIdWebFilter.HEADER_NAME, CORRELATION_ID)
+                .exchange()
+                .expectStatus().isEqualTo(HttpStatus.TOO_MANY_REQUESTS)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("AW-COMMON-RATE_LIMITED-0001")
+                .jsonPath("$.message").isEqualTo("请求过于频繁。");
     }
 
     @Test
@@ -226,12 +307,82 @@ class IdentityAuthProxyControllerTest {
 
     private static Stream<AuthRoute> authenticationRoutes() {
         return Stream.of(
-                new AuthRoute(HttpMethod.GET, "/api/v1/auth/csrf", false),
-                new AuthRoute(HttpMethod.GET, "/api/v1/auth/registration-options", false),
-                new AuthRoute(HttpMethod.POST, "/api/v1/auth/registrations", true),
-                new AuthRoute(HttpMethod.POST, "/api/v1/auth/sessions", true),
-                new AuthRoute(HttpMethod.GET, "/api/v1/auth/session", false),
-                new AuthRoute(HttpMethod.DELETE, "/api/v1/auth/session", false));
+                new AuthRoute(HttpMethod.GET, "/api/v1/auth/csrf", false, HttpStatus.OK,
+                        "{\"headerName\":\"X-CSRF-TOKEN\",\"parameterName\":\"_csrf\",\"value\":\"masked\"}"
+                                .getBytes(StandardCharsets.UTF_8)),
+                new AuthRoute(HttpMethod.GET, "/api/v1/auth/registration-options", false, HttpStatus.OK,
+                        ("{\"publicRegistrationEnabled\":true,\"emailVerificationRequired\":true,"
+                                + "\"passwordMinimumLength\":12,\"termsAcceptanceRequired\":true,"
+                                + "\"privacyAcceptanceRequired\":true}").getBytes(StandardCharsets.UTF_8)),
+                new AuthRoute(HttpMethod.POST, "/api/v1/auth/registrations", true, HttpStatus.ACCEPTED,
+                        "{\"accepted\":true}".getBytes(StandardCharsets.UTF_8)),
+                new AuthRoute(HttpMethod.POST, "/api/v1/auth/sessions", true, HttpStatus.OK,
+                        sessionResponseBody()),
+                new AuthRoute(HttpMethod.GET, "/api/v1/auth/session", false, HttpStatus.OK,
+                        sessionResponseBody()));
+    }
+
+    private static Stream<InvalidSuccessBody> invalidSuccessBodies() {
+        AuthRoute csrf = authenticationRoutes().findFirst().orElseThrow();
+        List<AuthRoute> routes = authenticationRoutes().toList();
+        AuthRoute registrations = routes.stream()
+                .filter(route -> "/api/v1/auth/registrations".equals(route.path()))
+                .findFirst()
+                .orElseThrow();
+        Stream<InvalidSuccessBody> generalInvalidBodies = Stream.concat(
+                Stream.of(
+                        new InvalidSuccessBody(csrf, "[]".getBytes(StandardCharsets.UTF_8)),
+                        new InvalidSuccessBody(csrf, "\"scalar\"".getBytes(StandardCharsets.UTF_8)),
+                        new InvalidSuccessBody(registrations,
+                                "{\"accepted\":false}".getBytes(StandardCharsets.UTF_8))),
+                routes.stream().map(route -> new InvalidSuccessBody(
+                        route, "{}".getBytes(StandardCharsets.UTF_8))));
+        return Stream.concat(generalInvalidBodies, invalidSessionSuccessBodies(routes));
+    }
+
+    private static byte[] sessionResponseBody() {
+        return sessionResponseJson().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static Stream<InvalidSuccessBody> invalidSessionSuccessBodies(List<AuthRoute> routes) {
+        AuthRoute session = routes.stream()
+                .filter(route -> "/api/v1/auth/session".equals(route.path()))
+                .findFirst()
+                .orElseThrow();
+        String valid = sessionResponseJson();
+        return Stream.of(
+                invalidSession(session, valid.replace(userJson(), "{}")),
+                invalidSession(session, valid.replace("11111111-1111-4111-8111-111111111111", "not-uuid")),
+                invalidSession(session, valid.replace("\"role\":\"USER\"", "\"role\":\"OWNER\"")),
+                invalidSession(session, valid.replace("\"status\":\"ACTIVE\"", "\"status\":\"LOCKED\"")),
+                invalidSession(session, valid.replace("\"emailVerified\":true", "\"emailVerified\":\"true\"")),
+                invalidSession(session, valid.replace("\"email\":\"user@example.test\"", "\"email\":42")),
+                invalidSession(session, valid.replace("Test User", "x".repeat(81))),
+                invalidSession(session, valid.replace("2026-07-18T00:00:00Z", "invalid-user-created")),
+                invalidSession(session, valid.replace("2026-07-18T01:00:00Z", "invalid-user-updated")),
+                invalidSession(session, valid.replace("2026-07-19T00:00:00Z", "invalid-session-created")),
+                invalidSession(session, valid.replace("2026-07-20T00:00:00Z", "invalid-session-expires")));
+    }
+
+    private static InvalidSuccessBody invalidSession(AuthRoute session, String body) {
+        return new InvalidSuccessBody(session, body.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String sessionResponseJson() {
+        return "{\"user\":" + userJson()
+                + ",\"createdAt\":\"2026-07-19T00:00:00Z\""
+                + ",\"expiresAt\":\"2026-07-20T00:00:00Z\"}";
+    }
+
+    private static String userJson() {
+        return "{\"id\":\"11111111-1111-4111-8111-111111111111\""
+                + ",\"email\":\"user@example.test\""
+                + ",\"displayName\":\"Test User\""
+                + ",\"role\":\"USER\""
+                + ",\"status\":\"ACTIVE\""
+                + ",\"emailVerified\":true"
+                + ",\"createdAt\":\"2026-07-18T00:00:00Z\""
+                + ",\"updatedAt\":\"2026-07-18T01:00:00Z\"}";
     }
 
     private static HttpHeaders responseHeaders() {
@@ -244,13 +395,28 @@ class IdentityAuthProxyControllerTest {
         return headers;
     }
 
+    private static HttpHeaders plainTextHeaders() {
+        HttpHeaders headers = responseHeaders();
+        headers.setContentType(MediaType.TEXT_PLAIN);
+        return headers;
+    }
+
     private static HttpHeaders copyHeaders(io.netty.handler.codec.http.HttpHeaders source) {
         HttpHeaders target = new HttpHeaders();
         source.forEach(header -> target.add(header.getKey(), header.getValue()));
         return target;
     }
 
-    private record AuthRoute(HttpMethod method, String path, boolean acceptsBody) {
+    private record AuthRoute(
+            HttpMethod method,
+            String path,
+            boolean acceptsBody,
+            HttpStatus status,
+            byte[] responseBody
+    ) {
+    }
+
+    private record InvalidSuccessBody(AuthRoute route, byte[] body) {
     }
 
     private record CapturedRequest(String method, String path, HttpHeaders headers, byte[] body) {

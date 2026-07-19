@@ -36,7 +36,7 @@
 
 ---
 
-### Task 1：Gateway 模块、配置与公共错误基线
+### Task 1：Gateway 模块、配置与公共错误基线（已完成）
 
 **文件：**
 
@@ -69,11 +69,11 @@ public enum GatewayErrorCode {
 }
 ```
 
-- [ ] **Step 1：先写配置与关联 ID 红灯测试**
+- [x] **Step 1：先写配置与关联 ID 红灯测试**
 
 测试必须断言：接受不含用户信息、Query、Fragment 的绝对 HTTPS URI，以及仅指向回环地址的绝对 HTTP URI；拒绝相对 URI、非回环 HTTP URI和其他危险格式；接受 16-64 位公共关联 ID；非法或缺失时生成新值；响应始终回写 `X-Correlation-ID`。
 
-- [ ] **Step 2：运行红灯**
+- [x] **Step 2：运行红灯**
 
 ```powershell
 mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service -am test
@@ -81,7 +81,7 @@ mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service -am te
 
 预期：因根 reactor 尚无 Gateway 模块或类型不存在而失败。
 
-- [ ] **Step 3：实现最小模块与公共类型**
+- [x] **Step 3：实现最小模块与公共类型**
 
 `application.yaml` 固定：
 
@@ -108,7 +108,7 @@ autumn-wind:
 
 `CorrelationIdWebFilter` 使用 `^[A-Za-z0-9._-]{16,64}$`，否则生成不含敏感上下文的 UUID 字符串；把值放入 Exchange Attribute，并写入响应 Header。
 
-- [ ] **Step 4：运行绿灯与 reactor 检查**
+- [x] **Step 4：运行绿灯与 reactor 检查**
 
 ```powershell
 mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service -am test
@@ -117,7 +117,7 @@ git diff --check
 
 预期：Gateway 定向测试通过，根 reactor 能识别模块。
 
-- [ ] **Step 5：双重评审后由主代理提交**
+- [x] **Step 5：双重评审后由主代理提交**
 
 ```text
 build: 建立Gateway服务基础
@@ -125,7 +125,7 @@ build: 建立Gateway服务基础
 
 ---
 
-### Task 2：RSA 密钥、Service JWT 与 JWKS
+### Task 2：RSA 密钥、Service JWT 与 JWKS（已完成）
 
 **文件：**
 
@@ -156,11 +156,11 @@ public interface ServiceJwtIssuer {
 }
 ```
 
-- [ ] **Step 1：写密钥和 Token 红灯测试**
+- [x] **Step 1：写密钥和 Token 红灯测试**
 
 覆盖 PKCS#8 私钥、X.509 公钥、2048 位下限、公私钥匹配、Key ID、RS256、Issuer、Subject、单 Audience、60 秒寿命、唯一 `jti`、scope 排序，以及 actor 在 Registry Token 中存在、在 Introspection Token 中不存在。
 
-- [ ] **Step 2：运行红灯**
+- [x] **Step 2：运行红灯**
 
 ```powershell
 mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service "-Dtest=RsaKeyMaterialLoaderTest,NimbusServiceJwtIssuerTest,GatewayJwksControllerTest" test
@@ -168,7 +168,7 @@ mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service "-Dtes
 
 预期：类型不存在而编译失败。
 
-- [ ] **Step 3：实现最小 JWT 边界**
+- [x] **Step 3：实现最小 JWT 边界**
 
 配置固定读取：
 
@@ -185,7 +185,7 @@ service-jwt:
 
 JWKS 路径固定为 `GET /internal/v1/security/jwks`，只输出 `kty/kid/use/alg/n/e`，并设置 `Cache-Control: public, max-age=300`。
 
-- [ ] **Step 4：运行绿灯和敏感字段断言**
+- [x] **Step 4：运行绿灯和敏感字段断言**
 
 ```powershell
 mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service "-Dtest=RsaKeyMaterialLoaderTest,NimbusServiceJwtIssuerTest,GatewayJwksControllerTest" test
@@ -193,7 +193,7 @@ mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service "-Dtes
 
 预期：全部通过；JWKS JSON 不含 `d/p/q/dp/dq/qi`。
 
-- [ ] **Step 5：双重评审后由主代理提交**
+- [x] **Step 5：双重评审后由主代理提交**
 
 ```text
 feat: 建立Gateway服务JWT边界
@@ -201,7 +201,7 @@ feat: 建立Gateway服务JWT边界
 
 ---
 
-### Task 3：Identity 公共认证透明代理
+### Task 3：Identity 公共认证透明代理（已完成）
 
 **文件：**
 
@@ -226,11 +226,11 @@ public interface IdentityAuthProxyClient {
 }
 ```
 
-- [ ] **Step 1：写六条路径与 Header 白名单红灯测试**
+- [x] **Step 1：写六条路径与 Header 白名单红灯测试**
 
 精确覆盖规格中的六条认证路由；断言 Cookie、CSRF、Content-Type、Accept、关联 ID 和 Trace 可转发，浏览器 Authorization、actor 与转发 Header 被删除；`Set-Cookie` 原样返回；17 KiB 登录正文返回 `413` 且下游未收到请求。
 
-- [ ] **Step 2：运行红灯**
+- [x] **Step 2：运行红灯**
 
 ```powershell
 mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service "-Dtest=IdentityAuthProxyControllerTest,GatewaySecurityConfigurationTest" test
@@ -238,13 +238,13 @@ mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service "-Dtes
 
 预期：代理类型不存在而失败。
 
-- [ ] **Step 3：实现显式路由和受限转发**
+- [x] **Step 3：实现显式路由和受限转发**
 
 不使用通配代理 Controller。每个方法只映射规格列出的固定路径；请求正文先使用 `DataBufferUtils.join(..., 16 * 1024)` 限制，再交给配置了 1 MiB响应上限和 5 秒超时的 Identity WebClient。
 
 Gateway Security 禁用 HttpSession、Basic、Form Login 和 Gateway 自身 CSRF；只放行六条认证路由、JWKS、health/info 和模型列表 GET，其他路由拒绝。认证写请求仍携带 Identity CSRF Cookie/Header，由 Identity 终审。
 
-- [ ] **Step 4：运行绿灯**
+- [x] **Step 4：运行绿灯**
 
 ```powershell
 mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service "-Dtest=IdentityAuthProxyControllerTest,GatewaySecurityConfigurationTest" test
@@ -252,7 +252,7 @@ mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service "-Dtes
 
 预期：路径、方法、Header、Cookie、超限和错误映射测试通过。
 
-- [ ] **Step 5：双重评审后由主代理提交**
+- [x] **Step 5：双重评审后由主代理提交**
 
 ```text
 feat: 实现Identity认证透明代理
@@ -260,7 +260,7 @@ feat: 实现Identity认证透明代理
 
 ---
 
-### Task 4：Session Introspection 与请求身份
+### Task 4：Session Introspection 与请求身份（已完成）
 
 **文件：**
 
@@ -284,11 +284,11 @@ public interface IdentitySessionClient {
 }
 ```
 
-- [ ] **Step 1：写 Cookie 与 fail-closed 红灯测试**
+- [x] **Step 1：写 Cookie 与 fail-closed 红灯测试**
 
 覆盖无 Cookie、空白、重复、inactive、过期、非 ACTIVE、字段缺失、非法 JSON、错误媒体类型、2 秒超时和正常 ACTIVE。断言 Introspection JWT 为 `aud=identity-service`、scope `identity.session.introspect` 且无 `actor_user_id`。
 
-- [ ] **Step 2：运行红灯**
+- [x] **Step 2：运行红灯**
 
 ```powershell
 mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service "-Dtest=SessionCookieExtractorTest,IdentitySessionClientTest,GatewaySessionAuthenticationWebFilterTest" test
@@ -296,19 +296,19 @@ mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service "-Dtes
 
 预期：类型不存在而失败。
 
-- [ ] **Step 3：实现不缓存身份确认**
+- [x] **Step 3：实现不缓存身份确认**
 
 过滤器只匹配 `GET /api/v1/model-registry/models`。成功时把 `GatewayUserPrincipal` 放入 Exchange Attribute `gateway.authenticatedUser`；无效会话写 `401 AW-GATEWAY-AUTH-0001`；Identity 故障写 `503 AW-GATEWAY-DEPENDENCY-0001`；协议错误写 `502 AW-GATEWAY-DEPENDENCY-0003`。
 
 `SessionIntrospectionRequest.toString()` 固定返回 `sessionValue=<REDACTED>`，任何错误都不携带原始响应或 Session。
 
-- [ ] **Step 4：运行绿灯**
+- [x] **Step 4：运行绿灯**
 
 ```powershell
 mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service "-Dtest=SessionCookieExtractorTest,IdentitySessionClientTest,GatewaySessionAuthenticationWebFilterTest" test
 ```
 
-- [ ] **Step 5：双重评审后由主代理提交**
+- [x] **Step 5：双重评审后由主代理提交**
 
 ```text
 feat: 接入Gateway浏览器会话校验
@@ -316,7 +316,7 @@ feat: 接入Gateway浏览器会话校验
 
 ---
 
-### Task 5：Model Registry 只读 scope
+### Task 5：Model Registry 只读 scope（已完成）
 
 **文件：**
 
@@ -331,11 +331,11 @@ feat: 接入Gateway浏览器会话校验
 model-registry.model.read
 ```
 
-- [ ] **Step 1：写只读 scope 红灯测试和契约断言**
+- [x] **Step 1：写只读 scope 红灯测试和契约断言**
 
 测试只读 Token 可 GET 列表/单项，不可 POST/PUT；既有 manage Token 仍可读写；两种 Token 均必须有合法 `actor_user_id`。验证脚本要求 OpenAPI 描述同时声明 read/manage 的方法边界。
 
-- [ ] **Step 2：运行红灯**
+- [x] **Step 2：运行红灯**
 
 ```powershell
 pwsh -NoProfile -File scripts/verify-contracts.ps1
@@ -344,18 +344,18 @@ mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/model-registry-service
 
 预期：新 scope 尚未授权或契约未声明而失败。
 
-- [ ] **Step 3：实现最小权限兼容授权**
+- [x] **Step 3：实现最小权限兼容授权**
 
 GET 接受 `SCOPE_model-registry.model.read` 或 `SCOPE_model-registry.model.manage`；POST/PUT 只接受 manage。复用既有 actor UUID 校验，不放宽端点或内部解析权限。
 
-- [ ] **Step 4：运行绿灯**
+- [x] **Step 4：运行绿灯**
 
 ```powershell
 pwsh -NoProfile -File scripts/verify-contracts.ps1
 mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/model-registry-service "-Dtest=ModelRegistryModelSecurityTest" test
 ```
 
-- [ ] **Step 5：双重评审后由主代理提交**
+- [x] **Step 5：双重评审后由主代理提交**
 
 ```text
 feat: 增加模型目录只读权限
@@ -363,7 +363,7 @@ feat: 增加模型目录只读权限
 
 ---
 
-### Task 6：Gateway 只读模型目录代理
+### Task 6：Gateway 只读模型目录代理（已完成）
 
 **文件：**
 
@@ -379,11 +379,11 @@ public interface ModelRegistryProxyClient {
 }
 ```
 
-- [ ] **Step 1：写身份传播红灯测试**
+- [x] **Step 1：写身份传播红灯测试**
 
 有效 Session 场景断言 Registry 收到 `aud=model-registry-service`、scope `model-registry.model.read`、正确 `actor_user_id` 与关联 ID；不得收到 Cookie、CSRF、浏览器 Authorization 或伪造 actor Header。覆盖合法业务错误透传、非法错误转 `502`、连接失败转 `503`。
 
-- [ ] **Step 2：运行红灯**
+- [x] **Step 2：运行红灯**
 
 ```powershell
 mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service "-Dtest=ModelCatalogProxyControllerTest" test
@@ -391,18 +391,18 @@ mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service "-Dtes
 
 预期：代理类型不存在而失败。
 
-- [ ] **Step 3：实现只读代理**
+- [x] **Step 3：实现只读代理**
 
 Controller 只允许 GET 且从 `gateway.authenticatedUser` 读取身份。Client 每请求签发新 Token，固定请求 `/api/v1/model-registry/models`，5 秒超时，1 MiB JSON 上限；只返回 Content-Type、关联 ID、Retry-After 与安全缓存 Header。
 
-- [ ] **Step 4：运行 Gateway 与 Registry 绿灯**
+- [x] **Step 4：运行 Gateway 与 Registry 绿灯**
 
 ```powershell
 mvn "-Dmaven.repo.local=$PWD\.m2\repository" -pl services/gateway-service,services/model-registry-service -am test
 git diff --check
 ```
 
-- [ ] **Step 5：双重评审后由主代理提交**
+- [x] **Step 5：双重评审后由主代理提交**
 
 ```text
 feat: 提供Gateway模型目录代理
@@ -410,7 +410,7 @@ feat: 提供Gateway模型目录代理
 
 ---
 
-### Task 7：安全回归、中文文档与完整验证
+### Task 7：安全回归、中文文档与完整验证（已完成）
 
 **文件：**
 
@@ -420,19 +420,19 @@ feat: 提供Gateway模型目录代理
 - 修改：`docs/superpowers/plans/2026-07-19-gateway-auth-foundation.md`
 - 按评审结论修改本计划范围内测试或实现文件。
 
-- [ ] **Step 1：补充跨边界安全测试**
+- [x] **Step 1：补充跨边界安全测试**
 
 加入测试证明：JWKS 无私钥字段；所有未声明路由拒绝；下游错误不泄露地址/正文；敏感 DTO 的 `toString()` 脱敏；17 KiB 请求被拒绝；Cookie 不进入 Registry；JWT Audience/scope/actor 不可复用。
 
-- [ ] **Step 2：编写中文开发说明**
+- [x] **Step 2：编写中文开发说明**
 
 文档必须记录端口、环境变量名、PEM 格式、内部 HTTPS、JWKS、六条认证路由、只读模型路由、超时、错误、测试命令和真实 Conversation 尚未接入。不得包含密钥示例正文。
 
-- [ ] **Step 3：同步总执行状态**
+- [x] **Step 3：同步总执行状态**
 
 `execution-plan.md` 更新为阶段 1-3 完成、阶段 4 正在完成 Gateway/Conversation 真实链路；删除已经过时的“阶段 3 下一批”描述。README 增加 Gateway 开发文档入口，但不得声称生产文本聊天已经完成。
 
-- [ ] **Step 4：运行完整验证**
+- [x] **Step 4：运行完整验证**
 
 ```powershell
 pwsh -NoProfile -File scripts/verify-contracts.ps1
@@ -446,11 +446,11 @@ git diff --check
 
 预期：全部退出 0；允许保留已经记录的前端主 chunk 非阻断警告。
 
-- [ ] **Step 5：安全与范围检查**
+- [x] **Step 5：安全与范围检查**
 
 确认暂存文件不包含 `.agents/`、`AGENTS.md`、`.codex/`、`.superpowers/`、PEM、JWK 私钥字段、Token、Cookie 值、密码、真实下游地址、构建产物或测试缓存。
 
-- [ ] **Step 6：最终评审后由主代理提交并推送**
+- [x] **Step 6：最终评审后由主代理提交并推送**
 
 ```text
 test: 验证Gateway认证安全边界
